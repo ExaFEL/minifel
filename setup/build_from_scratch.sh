@@ -149,7 +149,7 @@ conda create -y -p "$CONDA_ENV_DIR" "${PACKAGE_LIST[@]}"
 # sed s/PYTHONVER/$PYVER/ relmanage/env_create.yaml > temp_env_create.yaml
 # conda env create -p "$CONDA_ENV_DIR" -f temp_env_create.yaml
 conda activate "$CONDA_ENV_DIR"
-conda install amityping -c lcls-ii
+conda install -y amityping -c lcls-ii
 
 # Workaround for mpi4py not being built with the right MPI.
 if [[ $(hostname --fqdn) = *"summit"* ]]; then
