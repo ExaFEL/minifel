@@ -20,7 +20,8 @@
 #include "legion.h"
 
 #include <cstdint>
-#include <cinttypes>
+// FIXME: results in build failure on Summit with <cinttypes>
+#include <inttypes.h>
 
 using namespace Legion;
 
