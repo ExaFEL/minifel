@@ -76,7 +76,7 @@ def solve_step(data, rank, iteration):
         initial_state.generate_support_from_autocorrelation()
         initial_state.generate_random_rho()
 
-    phaser = Phaser(initial_state)
+    phaser = Phaser(initial_state, monitor=True)
     #phaser.HIO_loop(2, .1)
     phaser.ER_loop(2)
     #phaser.shrink_wrap(.01)
