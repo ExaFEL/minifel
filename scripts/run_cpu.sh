@@ -7,7 +7,7 @@ source "$root_dir"/../setup/env.sh
 
 cd "$root_dir"/..
 
-export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$root_dir/scripts/build:$CONDA_ENV_DIR/lib"
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$root_dir/native_kernels/build:$CONDA_ENV_DIR/lib"
 export PS_PARALLEL=legion
 
 export KERNEL_KIND=sum
