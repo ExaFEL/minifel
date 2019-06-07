@@ -52,7 +52,7 @@ export CC=gcc
 export CXX=g++
 
 export USE_CUDA=${USE_CUDA:-0}
-export USE_GASNET=${USE_GASNET:-0}
+export USE_GASNET=${USE_GASNET:-1}
 export CONDUIT=${CONDUIT:-mpi}
 EOF
 else
