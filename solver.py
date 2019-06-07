@@ -39,6 +39,8 @@ from phaseret.generator3D import Projection
 
 N_POINTS = 64
 
+root_dir = os.path.dirname(os.path.realpath(__file__))
+data_dir = os.path.join(root_dir, 'data', 'wangzy')
 
 @task(privileges=[RW], leaf=True)
 def generate_data(data):
@@ -47,10 +49,11 @@ def generate_data(data):
 
     H, K, L = numpy.meshgrid(spacing, spacing, spacing)
 
-    caffeine_pbd = os.path.join("caffeine.pdb")
+    caffeine_pbd = os.path.join(data_dir, "caffeine.pdb")
     caffeine = Projection.Molecule(caffeine_pbd)
 
-    caffeine_trans = Projection.moltrans(caffeine, H, K, L)
+    atomsf_lib = os.path.join(data_dir, "atomsf.lib")
+    caffeine_trans = Projection.moltrans(caffeine, H, K, L, atomsf_lib)
     caffeine_trans_ = fft.ifftshift(caffeine_trans)
 
     amplitudes = numpy.absolute(caffeine_trans)
