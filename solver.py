@@ -101,7 +101,7 @@ def solve(n_runs):
     gen_data_shape = (N_POINTS,) * 3
     data = legion.Region.create(gen_data_shape, {
         'amplitudes': legion.float32,
-        'support': legion.uint8,  # should be bool
+        'support': legion.bool_,
         'rho': legion.complex64})
 
     legion.fill(data, 'amplitudes', 0.)
