@@ -3,6 +3,7 @@
 /lcls2
 /relmanage
 
+/cupy
 /gasnet
 /legion
 /install

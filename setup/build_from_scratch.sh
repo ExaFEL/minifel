@@ -163,6 +163,9 @@ fi
 # Install phaseret.
 ./install_phaseret.sh
 
+# Install cupy.
+./install_cupy.sh
+
 # Install Legion.
 # conda build relmanage/recipes/legion/ --output-folder channels/external/ --python $PYVER
 # conda install -y legion -c file://`pwd`/channels/external --override-channels
