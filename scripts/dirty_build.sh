@@ -2,12 +2,12 @@
 
 set -e
 
-root_dir="$(dirname "${BASH_SOURCE[0]}")"
-cd "$root_dir"
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$root_dir"/../native_kernels
 
-source ../setup/env.sh
+source "$root_dir"/../setup/env.sh
 
 mkdir -p build
 cd build
-cmake -DCMAKE_PREFIX_PATH="$LEGION_INSTALL_DIR" ../../native_kernels
+cmake -DCMAKE_PREFIX_PATH="$LEGION_INSTALL_DIR" ..
 make -j8

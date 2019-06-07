@@ -160,6 +160,9 @@ elif [[ $(hostname) = "sapling" ]]; then
     MPICC=mpicc pip install -v --no-binary mpi4py mpi4py
 fi
 
+# Install phaseret.
+./install_phaseret.sh
+
 # Install Legion.
 # conda build relmanage/recipes/legion/ --output-folder channels/external/ --python $PYVER
 # conda install -y legion -c file://`pwd`/channels/external --override-channels

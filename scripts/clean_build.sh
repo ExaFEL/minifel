@@ -2,8 +2,8 @@
 
 set -e
 
-root_dir="$(dirname "${BASH_SOURCE[0]}")"
-cd "$root_dir"
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$root_dir"/../native_kernels
 
 rm -rf build
-./dirty_build.sh
+"$root_dir"/dirty_build.sh
