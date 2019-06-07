@@ -9,5 +9,5 @@ source ../setup/env.sh
 
 mkdir -p build
 cd build
-cmake -DCMAKE_PREFIX_PATH="$LEGION_INSTALL_DIR" ../native_kernels
+cmake -DCMAKE_PREFIX_PATH="$LEGION_INSTALL_DIR" ../../native_kernels
 make -j8
