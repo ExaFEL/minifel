@@ -1,3 +1,3 @@
 [submodule "phaseret"]
-	path = phaseret
+	path = setup/phaseret
 	url = git@github.com:AntoineDujardin/phaseret.git
