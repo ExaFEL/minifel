@@ -85,6 +85,8 @@ def solve_step(data, rank, iteration):
     err_real = phaser.get_real_errs()[-1]
     print(f"Errors: {err_Fourier:.5f}, {err_real:.5f}")
 
+    numpy.copyto(data.support, phaser.get_support(True), casting='no')
+    numpy.copyto(data.rho, phaser.get_rho(True), casting='no')
 
 @task(privileges=[RW], replicable=True)
 def solve(n_runs):
