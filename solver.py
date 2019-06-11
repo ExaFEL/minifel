@@ -42,6 +42,7 @@ N_POINTS = 64
 root_dir = os.path.dirname(os.path.realpath(__file__))
 data_dir = os.path.join(root_dir, 'data', 'wangzy')
 
+
 @task(privileges=[RW], leaf=True)
 def generate_data(data):
     cutoff = 2
@@ -76,10 +77,10 @@ def solve_step(data, rank, iteration):
         initial_state.generate_support_from_autocorrelation()
         initial_state.generate_random_rho()
 
-    phaser = Phaser(initial_state, monitor=True)
-    #phaser.HIO_loop(2, .1)
+    phaser = Phaser(initial_state, monitor='last')
+    phaser.HIO_loop(2, .1)
     phaser.ER_loop(2)
-    #phaser.shrink_wrap(.01)
+    phaser.shrink_wrap(.01)
 
     err_Fourier = phaser.get_Fourier_errs()[-1]
     err_real = phaser.get_real_errs()[-1]
@@ -87,6 +88,7 @@ def solve_step(data, rank, iteration):
 
     numpy.copyto(data.support, phaser.get_support(True), casting='no')
     numpy.copyto(data.rho, phaser.get_rho(True), casting='no')
+
 
 @task(privileges=[RW], replicable=True)
 def solve(n_runs):
