@@ -96,11 +96,16 @@ def solve(n_runs):
     print(f"Working with {n_procs} processes\n")
 
     # Allocate data structures.
-    n_xpp_events_per_node = 1000
-    xpp_event_raw_shape = (2, 3, 6)
-    xpp_data = legion.Region.create((n_xpp_events_per_node,) + xpp_event_raw_shape, {'x': legion.uint16})
-    legion.fill(xpp_data, 'x', 0)
-    xpp_part = legion.Partition.create_equal(xpp_data, [n_procs])
+    n_events_per_node = 100
+    event_raw_shape = (4, 1024, 512)  # BUG: this should be (4, 512, 512)
+    images = legion.Region.create(
+        (n_events_per_node,) + event_raw_shape, {'image': legion.float32})
+    orientations = legion.Region.create(
+        (n_events_per_node, 4), {'orientation': legion.float32})
+    legion.fill(images, 'image', 0)
+    legion.fill(orientations, 'orientation', 0)
+    images_part = legion.Partition.create_equal(images, [n_procs])
+    orient_part = legion.Partition.create_equal(orientations, [n_procs])
 
     gen_data_shape = (N_POINTS,) * 3
     data = legion.Region.create(gen_data_shape, {
@@ -120,11 +125,12 @@ def solve(n_runs):
             # Obtain the newest copy of the data.
             with legion.MustEpochLaunch([n_procs]):
                 for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-                    data_collector.fill_data_region(xpp_part[idx], point=idx)
+                    data_collector.fill_data_region(
+                        images_part[idx], orient_part[idx], point=idx)
 
         # Preprocess data.
         for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-            preprocess(xpp_part, data)
+            preprocess(images_part, data)
 
         # Generate data on first run
         if not iteration:

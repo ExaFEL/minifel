@@ -13,7 +13,7 @@ export PS_PARALLEL=legion
 export KERNEL_KIND=sum
 export LIMIT=10
 
-export DATA_DIR="${DATA_DIR:-/reg/d/psdm/xpp/xpptut15/scratch/mona/xtc2}"
+export DATA_DIR="${DATA_DIR:-/reg/neh/home/dujardin/minifel/data/marc}"
 if [[ ! -d $DATA_DIR ]]; then
     echo "DATA_DIR is not set or does not exist. Please check it and rerun."
     false

@@ -35,19 +35,16 @@ import solver
 import numpy as np
 from numpy import fft
 
-# At this point, we cannot have a realistic algorithm that collects
-# realistic data and solves the phasing problem.
-# Therefore, this program divides the problem:
-#  - it loads realistic XPP data;
-#  - it applies a realistic phasing solve on generated data.
-
 
 @task(top_level=True, replicable=True)
 def main():
     limit = int(os.environ['LIMIT']) if 'LIMIT' in os.environ else None
 
-    xtc_dir = os.environ['DATA_DIR']
-    ds = DataSource(exp='xpptut13', run=1, dir=xtc_dir, max_events=limit, det_name='xppcspad')
+    data_dir = os.environ['DATA_DIR']
+    ds = DataSource(exp='junk', run=1, dir=data_dir, max_events=limit,
+                    det_name='spi_cspad')
+    # Note: DataSource doesn't seem to care about max_events when given
+    # a filename.
 
     n_runs = 0
     for run in ds.runs():

@@ -42,10 +42,13 @@ data_lock = threading.Lock()
 
 def load_event_data(event, det):
     global n_events_ready
-    raw = det.raw.raw(event)
+    image = event._dgrams[0].spi_cspad[0].raw.image
+    orientation = event._dgrams[0].spi_cspad[0].raw.orientation
+
     with data_lock:
-        data_store.append((event, raw))
+        data_store.append((event, image, orientation))
         n_events_ready += 1
+
 
 @task(leaf=True)
 def mark_completion(_):
@@ -54,8 +57,9 @@ def mark_completion(_):
     with data_lock:
         n_runs_complete += 1
 
+
 def load_run_data(run):
-    det = run.Detector('xppcspad')
+    det = run.Detector('spi_cspad')
 
     # Hack: psana tries to register top-level task when not in script mode
     old_is_script = legion.is_script
@@ -77,8 +81,8 @@ def reset_data():
         n_events_used = 0
 
 
-@task(privileges=[RW], leaf=True)
-def fill_data_region(data):
+@task(privileges=[RW, RW], leaf=True)
+def fill_data_region(images, orientations):
     global data_store, n_events_used
     with data_lock:
         raw, used, ready = data_store, n_events_used, n_events_ready
@@ -86,10 +90,13 @@ def fill_data_region(data):
         n_events_used = ready
 
     for idx in range(used, ready):
-        numpy.copyto(data.x[idx,:,:,:], raw[idx - used][1], casting='no')
+        numpy.copyto(images.image[idx,:,:,:], raw[idx - used][1], casting='no')
+        numpy.copyto(orientations.orientation[idx,:], raw[idx - used][2],
+                     casting='no')
 
     if ready != used:
         print(f"Filled {ready-used} new events.")
+
 
 def get_num_runs_complete():
     with data_lock:
