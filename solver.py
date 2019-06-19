@@ -17,6 +17,7 @@
 
 from __future__ import print_function
 
+import h5py as h5
 import legion
 from legion import task, R, RW
 import numpy
@@ -90,6 +91,15 @@ def solve_step(data, rank, iteration):
     numpy.copyto(data.rho, phaser.get_rho(True), casting='no')
 
 
+@task(privileges=[R], leaf=True)
+def save(data, idx):
+    print("Saving data...")
+    with h5.File(os.environ['OUT_DIR'] + f'/run-{idx}.hdf5', 'w') as f:
+        shape = data.image.shape
+        dtype = data.image.dtype
+        f.create_dataset("images", shape=shape, data=data.image, dtype=dtype)
+
+
 @task(privileges=[RW], replicable=True)
 def solve(n_runs):
     n_procs = legion.Tunable.select(legion.Tunable.GLOBAL_PYS).get()
@@ -149,3 +159,6 @@ def solve(n_runs):
             complete = data_collector.get_num_runs_complete() == n_runs
 
         iteration += 1
+
+    for idx in range(n_procs):
+        save(images_part[idx], idx, point=idx)
