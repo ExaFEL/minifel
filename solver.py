@@ -82,7 +82,7 @@ def solve_step(data, rank, iteration):
     phaser.ER_loop(2)
     phaser.shrink_wrap(.01)
 
-    err_Fourier = phaser.get_Fourier_errs()[-1]
+    err_Fourier = phaser.get_reciprocal_errs()[-1]
     err_real = phaser.get_real_errs()[-1]
     print(f"Errors: {err_Fourier:.5f}, {err_real:.5f}")
 
