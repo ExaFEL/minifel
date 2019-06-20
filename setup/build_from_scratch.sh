@@ -164,6 +164,9 @@ fi
 # Install phaseret.
 ./install_phaseret.sh
 
+# Install pysingfel.
+./install_pysingfel.sh
+
 # Install cupy.
 ./install_cupy.sh
 
