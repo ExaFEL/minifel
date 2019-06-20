@@ -107,15 +107,17 @@ def solve(n_runs):
 
     # Allocate data structures.
     n_events_per_node = 100
-    event_raw_shape = (4, 1024, 512)  # BUG: this should be (4, 512, 512)
+    event_raw_shape = (4, 512, 512)
     images = legion.Region.create(
-        (n_events_per_node,) + event_raw_shape, {'image': legion.float32})
+        (n_events_per_node * n_procs,) + event_raw_shape, {'image': legion.float32})
     orientations = legion.Region.create(
-        (n_events_per_node, 4), {'orientation': legion.float32})
+        (n_events_per_node * n_procs, 4), {'orientation': legion.float32})
     legion.fill(images, 'image', 0)
     legion.fill(orientations, 'orientation', 0)
-    images_part = legion.Partition.create_equal(images, [n_procs])
-    orient_part = legion.Partition.create_equal(orientations, [n_procs])
+    images_part = legion.Partition.create_by_restriction(
+        images, [n_procs], numpy.ones([4, 1]), (n_events_per_node,) + event_raw_shape)
+    orient_part = legion.Partition.create_by_restriction(
+        orientations, [n_procs], [[n_events_per_node], [1]], (n_events_per_node, 4))
 
     gen_data_shape = (N_POINTS,) * 3
     data = legion.Region.create(gen_data_shape, {

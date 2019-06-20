@@ -26,4 +26,4 @@ if [[ ! -d $DATA_DIR ]]; then
 fi
 
 # legion_python user -ll:py 1 -ll:cpu 1 -level announce=2
-mpirun -n 2 legion_python user -ll:py 1 -ll:cpu 1 -level announce=2
+mpirun -n 2 legion_python user -ll:py 1 -ll:cpu 1 -ll:csize 8192 -level announce=2
