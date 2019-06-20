@@ -92,12 +92,11 @@ def solve_step(data, rank, iteration):
 
 
 @task(privileges=[R], leaf=True)
-def save(data, idx):
+def save(data, shape, idx):
     print("Saving data...")
     with h5.File(os.environ['OUT_DIR'] + f'/run-{idx}.hdf5', 'w') as f:
-        shape = data.image.shape
-        dtype = data.image.dtype
-        f.create_dataset("images", shape=shape, data=data.image, dtype=dtype)
+        f.create_dataset("images", shape=shape, data=data.image,
+                         dtype=legion.float32)
 
 
 @task(privileges=[RW], replicable=True)
@@ -163,4 +162,5 @@ def solve(n_runs):
         iteration += 1
 
     for idx in range(n_procs):
-        save(images_part[idx], idx, point=idx)
+        save(images_part[idx], (n_events_per_node,) + event_raw_shape,
+             idx, point=idx)
