@@ -92,14 +92,14 @@ def solve_step(data, rank, iteration):
 
 
 @task(privileges=[R], leaf=True)
-def save(data, shape, idx):
+def save(data, idx):
     print("Saving data...")
     with h5.File(os.environ['OUT_DIR'] + f'/run-{idx}.hdf5', 'w') as f:
-        f.create_dataset("images", shape=shape, data=data.image,
-                         dtype=legion.float32)
+        f.create_dataset("images", shape=data.image.shape, data=data.image,
+                         dtype=data.image.dtype)
 
 
-@task(privileges=[RW], replicable=True)
+@task(replicable=True)
 def solve(n_runs):
     n_procs = legion.Tunable.select(legion.Tunable.GLOBAL_PYS).get()
     print(f"Working with {n_procs} processes\n")
@@ -114,9 +114,9 @@ def solve(n_runs):
     legion.fill(images, 'image', 0)
     legion.fill(orientations, 'orientation', 0)
     images_part = legion.Partition.create_by_restriction(
-        images, [n_procs], numpy.ones([4, 1]), (n_events_per_node,) + event_raw_shape)
+        images, [n_procs], numpy.eye(4, 1) * n_events_per_node, (n_events_per_node,) + event_raw_shape)
     orient_part = legion.Partition.create_by_restriction(
-        orientations, [n_procs], [[n_events_per_node], [1]], (n_events_per_node, 4))
+        orientations, [n_procs], numpy.eye(2, 1) * n_events_per_node, (n_events_per_node, 4))
 
     gen_data_shape = (N_POINTS,) * 3
     data = legion.Region.create(gen_data_shape, {
@@ -140,8 +140,8 @@ def solve(n_runs):
                         images_part[idx], orient_part[idx], point=idx)
 
         # Preprocess data.
-        for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-            preprocess(images_part, data)
+        # for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
+        #     preprocess(images_part[idx], data)
 
         # Generate data on first run
         if not iteration:
@@ -162,5 +162,4 @@ def solve(n_runs):
         iteration += 1
 
     for idx in range(n_procs):
-        save(images_part[idx], (n_events_per_node,) + event_raw_shape,
-             idx, point=idx)
+        save(images_part[idx], idx, point=idx)
