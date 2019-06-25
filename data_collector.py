@@ -28,10 +28,6 @@ import threading
 ### Data Loading
 ###
 
-# Load realistic xpp data for the collecting part.
-# Create a 3D diffraction image for the phasing part.
-# See user.py for details.
-
 
 data_store = []
 n_events_ready = 0

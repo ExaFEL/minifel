@@ -28,14 +28,12 @@ import data_collector
 
 from phaseret import InitialState, Phaser
 from phaseret.generator3D import Projection
+import pysingfel as ps
+
 
 ###
 ### Solver
 ###
-
-# Oversimplified solve on realistic XPP data.
-# Somewhat realistic solve on the generated 3D data.
-# See user.py for details.
 
 
 N_POINTS = 64
