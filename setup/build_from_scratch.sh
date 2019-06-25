@@ -135,9 +135,12 @@ PACKAGE_LIST=(
     # Legion dependencies:
     cffi
 
+    # pysingfel dependencies:
+    numba
+    h5py
+
     # Proxy app dependencies:
     scipy
-    h5py
 )
 if [[ $(hostname --fqdn) != *"summit"* && $(hostname) != "cori"* && $(hostname) != "sapling" ]]; then
     PACKAGE_LIST+=(

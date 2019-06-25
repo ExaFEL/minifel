@@ -7,7 +7,6 @@ source "$root_dir"/env.sh
 
 pushd "$root_dir"/pysingfel
 
-conda install -y numba
 pip install -e .
 
 popd
