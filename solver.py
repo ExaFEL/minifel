@@ -92,9 +92,17 @@ def solve_step(data, rank, iteration):
 
 
 @task(privileges=[R], leaf=True)
-def save(data, idx):
-    print("Saving data...")
-    with h5.File(os.environ['OUT_DIR'] + f'/run-{idx}.hdf5', 'w') as f:
+def save_rho(data, idx):
+    print("Saving density...")
+    with h5.File(os.environ['OUT_DIR'] + f'/rho-{idx}.hdf5', 'w') as f:
+        f.create_dataset("rho", shape=data.rho.shape,
+                         data=data.rho, dtype=data.rho.dtype)
+
+
+@task(privileges=[R], leaf=True)
+def save_images(data, idx):
+    print("Saving images...")
+    with h5.File(os.environ['OUT_DIR'] + f'/images-{idx}.hdf5', 'w') as f:
         f.create_dataset("images", shape=data.image.shape, data=data.image,
                          dtype=data.image.dtype)
 
@@ -162,4 +170,5 @@ def solve(n_runs):
         iteration += 1
 
     for idx in range(n_procs):
-        save(images_part[idx], idx, point=idx)
+        save_images(images_part[idx], idx, point=idx)
+    save_rho(data, 0)
