@@ -56,9 +56,9 @@ def generate_data(data):
     caffeine_trans = Projection.moltrans(caffeine, H, K, L, atomsf_lib)
     caffeine_trans_ = fft.ifftshift(caffeine_trans)
 
-    amplitudes = numpy.absolute(caffeine_trans)
+    amplitude = numpy.absolute(caffeine_trans)
 
-    numpy.copyto(data.amplitudes, amplitudes)
+    numpy.copyto(data.amplitude, amplitude)
 
 
 @task(privileges=[R, RW], leaf=True)
@@ -67,9 +67,10 @@ def preprocess(data_in, data_out):
     pass # pretend to build/refine data_out (3D) out of data_in (set of 2D)
 
 
-@task(privileges=[RW], leaf=True)
-def solve_step(data, rank, iteration):
-    initial_state = InitialState(data.amplitudes, data.support, data.rho, True)
+@task(privileges=[R, RW], leaf=True)
+def solve_step(amplitudes, reconstruction, rank, iteration):
+    initial_state = InitialState(amplitudes.amplitude, reconstruction.support,
+                                 reconstruction.rho, True)
 
     if iteration == 0:
         print(f"Initializing rank #{rank}")
@@ -85,8 +86,9 @@ def solve_step(data, rank, iteration):
     err_real = phaser.get_real_errs()[-1]
     print(f"Errors: {err_Fourier:.5f}, {err_real:.5f}")
 
-    numpy.copyto(data.support, phaser.get_support(True), casting='no')
-    numpy.copyto(data.rho, phaser.get_rho(True), casting='no')
+    numpy.copyto(reconstruction.support, phaser.get_support(True),
+                 casting='no')
+    numpy.copyto(reconstruction.rho, phaser.get_rho(True), casting='no')
 
 
 @task(privileges=[R], leaf=True)
@@ -124,15 +126,15 @@ def solve(n_runs):
     orient_part = legion.Partition.create_by_restriction(
         orientations, [n_procs], numpy.eye(2, 1) * n_events_per_node, (n_events_per_node, 4))
 
-    gen_data_shape = (N_POINTS,) * 3
-    data = legion.Region.create(gen_data_shape, {
-        'amplitudes': legion.float32,
+    volume_shape = (N_POINTS,) * 3
+    amplitudes = legion.Region.create(volume_shape, {
+        'amplitude': legion.float32})
+    legion.fill(amplitudes, 'amplitude', 0.)
+    reconstruction = legion.Region.create(volume_shape, {
         'support': legion.bool_,
         'rho': legion.complex64})
-
-    legion.fill(data, 'amplitudes', 0.)
-    legion.fill(data, 'support', 0)
-    legion.fill(data, 'rho', 0.)
+    legion.fill(reconstruction, 'support', False)
+    legion.fill(reconstruction, 'rho', 0.)
 
     complete = False
     iteration = 0
@@ -151,10 +153,10 @@ def solve(n_runs):
 
         # Generate data on first run
         if not iteration:
-            generate_data(data)
+            generate_data(amplitudes)
 
         # Run solver.
-        solve_step(data, 0, iteration)
+        solve_step(amplitudes, reconstruction, 0, iteration)
 
         if not complete:
             # Make sure we don't run more than 2 iterations ahead.
@@ -169,4 +171,4 @@ def solve(n_runs):
 
     for idx in range(n_procs):
         save_images(images_part[idx], idx, point=idx)
-    save_rho(data, 0)
+    save_rho(reconstruction, 0)
