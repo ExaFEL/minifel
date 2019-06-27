@@ -36,40 +36,30 @@ import pysingfel as ps
 ###
 
 
-N_POINTS = 64
+N_POINTS = 151
 
 root_dir = os.path.dirname(os.path.realpath(__file__))
 data_dir = os.path.join(root_dir, 'data', 'wangzy')
 
 
-@task(privileges=[RW], leaf=True)
-def generate_data(data):
-    cutoff = 2
-    spacing = numpy.linspace(-cutoff, cutoff, N_POINTS)
+@task(privileges=[R, R, R, RW], leaf=True)
+def preprocess(images, orientations, pixels, diffraction, voxel_length):
+    print("Aligning")
+    # BUG: We are currently re-accumulating the same data every-time
 
-    H, K, L = numpy.meshgrid(spacing, spacing, spacing)
-
-    caffeine_pbd = os.path.join(data_dir, "caffeine.pdb")
-    caffeine = Projection.Molecule(caffeine_pbd)
-
-    atomsf_lib = os.path.join(data_dir, "atomsf.lib")
-    caffeine_trans = Projection.moltrans(caffeine, H, K, L, atomsf_lib)
-    caffeine_trans_ = fft.ifftshift(caffeine_trans)
-
-    amplitude = numpy.absolute(caffeine_trans)
-
-    numpy.copyto(data.amplitude, amplitude)
+    for l in range(orientations.orientation.shape[0]):
+        if numpy.allclose(orientations.orientation[l], 0.):
+            continue
+        ps.merge_slice(
+            images.image[l], pixels.momentum, orientations.orientation[l],
+            diffraction.accumulator, diffraction.weight, voxel_length,
+            inverse=False)
 
 
 @task(privileges=[R, RW], leaf=True)
-def preprocess(data_in, data_out):
-    print("Preprocessing")
-    pass # pretend to build/refine data_out (3D) out of data_in (set of 2D)
-
-
-@task(privileges=[R, RW], leaf=True)
-def solve_step(amplitudes, reconstruction, rank, iteration):
-    initial_state = InitialState(amplitudes.amplitude, reconstruction.support,
+def solve_step(diffraction, reconstruction, rank, iteration):
+    amplitude = diffraction.accumulator / diffraction.weight
+    initial_state = InitialState(amplitude, reconstruction.support,
                                  reconstruction.rho, True)
 
     if iteration == 0:
@@ -89,6 +79,18 @@ def solve_step(amplitudes, reconstruction, rank, iteration):
     numpy.copyto(reconstruction.support, phaser.get_support(True),
                  casting='no')
     numpy.copyto(reconstruction.rho, phaser.get_rho(True), casting='no')
+
+
+@task(privileges=[R], leaf=True)
+def save_diffraction(diffraction, idx):
+    print("Saving diffraction...")
+    with h5.File(os.environ['OUT_DIR'] + f'/amplitude-{idx}.hdf5', 'w') as f:
+        f.create_dataset("accumulator", shape=diffraction.accumulator.shape,
+                         data=diffraction.accumulator,
+                         dtype=diffraction.accumulator.dtype)
+        f.create_dataset("weight", shape=diffraction.weight.shape,
+                         data=diffraction.weight,
+                         dtype=diffraction.weight.dtype)
 
 
 @task(privileges=[R], leaf=True)
@@ -116,7 +118,7 @@ def solve(n_runs):
     n_events_per_node = 100
     event_raw_shape = (4, 512, 512)
     images = legion.Region.create(
-        (n_events_per_node * n_procs,) + event_raw_shape, {'image': legion.float32})
+        (n_events_per_node * n_procs,) + event_raw_shape, {'image': legion.float64})
     orientations = legion.Region.create(
         (n_events_per_node * n_procs, 4), {'orientation': legion.float32})
     legion.fill(images, 'image', 0)
@@ -127,14 +129,31 @@ def solve(n_runs):
         orientations, [n_procs], numpy.eye(2, 1) * n_events_per_node, (n_events_per_node, 4))
 
     volume_shape = (N_POINTS,) * 3
-    amplitudes = legion.Region.create(volume_shape, {
-        'amplitude': legion.float32})
-    legion.fill(amplitudes, 'amplitude', 0.)
+    diffraction = legion.Region.create(volume_shape, {
+        'accumulator': legion.float32,
+        'weight': legion.float32})
+    legion.fill(diffraction, 'accumulator', 0.)
+    legion.fill(diffraction, 'weight', 0.)
+
     reconstruction = legion.Region.create(volume_shape, {
         'support': legion.bool_,
         'rho': legion.complex64})
     legion.fill(reconstruction, 'support', False)
     legion.fill(reconstruction, 'rho', 0.)
+
+    # Load pixel momentum
+    beam = ps.Beam('data/exp_chuck.beam')
+    det = ps.PnccdDetector(
+        geom='data/lcls/amo86615/PNCCD::CalibV1/Camp.0:pnCCD.1/'
+             'geometry/0-end.data',
+        beam=beam)
+    pixel_momentum = det.pixel_position_reciprocal
+    pixels = legion.Region.create(
+        event_raw_shape + (3,), {'momentum': legion.float64})
+    legion.fill(pixels, 'momentum', 0.)
+    numpy.copyto(pixels.momentum, det.pixel_position_reciprocal, casting='no')
+    max_pixel_dist = numpy.max(det.pixel_distance_reciprocal)
+    voxel_length = 2 * max_pixel_dist / (N_POINTS - 1)
 
     complete = False
     iteration = 0
@@ -147,16 +166,13 @@ def solve(n_runs):
                     data_collector.fill_data_region(
                         images_part[idx], orient_part[idx], point=idx)
 
-        # Preprocess data.
+        # # Preprocess data.
         # for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-        #     preprocess(images_part[idx], data)
+        #     preprocess(images_part[idx], orient_part[idx], pixels, diffraction,
+        #                voxel_length)
 
-        # Generate data on first run
-        if not iteration:
-            generate_data(amplitudes)
-
-        # Run solver.
-        solve_step(amplitudes, reconstruction, 0, iteration)
+        # # Run solver.
+        # solve_step(diffraction, reconstruction, 0, iteration)
 
         if not complete:
             # Make sure we don't run more than 2 iterations ahead.
@@ -169,6 +185,17 @@ def solve(n_runs):
 
         iteration += 1
 
+
+    ##### Currently preprocessing at the end to avoid doing it too often #####
+
+    # Preprocess data.
+    for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
+        preprocess(images_part[idx], orient_part[idx], pixels, diffraction,
+                   voxel_length)
+
+    ##### -------------------------------------------------------------- #####
+
     for idx in range(n_procs):
         save_images(images_part[idx], idx, point=idx)
     save_rho(reconstruction, 0)
+    save_diffraction(diffraction, 0)

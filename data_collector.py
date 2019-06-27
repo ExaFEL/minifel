@@ -38,8 +38,8 @@ data_lock = threading.Lock()
 
 def load_event_data(event, det):
     global n_events_ready
-    image = event._dgrams[0].spi_cspad[0].raw.image
-    orientation = event._dgrams[0].spi_cspad[0].raw.orientation
+    image = event._dgrams[0].pnccd[0].raw.image
+    orientation = event._dgrams[0].pnccd[0].raw.orientation
 
     with data_lock:
         data_store.append((event, image, orientation))
@@ -55,7 +55,7 @@ def mark_completion(_):
 
 
 def load_run_data(run):
-    det = run.Detector('spi_cspad')
+    det = run.Detector('pnccd')
 
     # Hack: psana tries to register top-level task when not in script mode
     old_is_script = legion.is_script
