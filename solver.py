@@ -19,7 +19,7 @@ from __future__ import print_function
 
 import h5py as h5
 import legion
-from legion import task, R, RW
+from legion import task, R, RW, Reduce
 import numpy
 from numpy import fft
 import os
@@ -42,7 +42,7 @@ root_dir = os.path.dirname(os.path.realpath(__file__))
 data_dir = os.path.join(root_dir, 'data', 'wangzy')
 
 
-@task(privileges=[R, R, R, RW], leaf=True)
+@task(privileges=[R, R, R, Reduce('+')], leaf=True)
 def preprocess(images, orientations, pixels, diffraction, voxel_length):
     print("Aligning")
     # BUG: We are currently re-accumulating the same data every-time
@@ -191,7 +191,7 @@ def solve(n_runs):
     # Preprocess data.
     for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
         preprocess(images_part[idx], orient_part[idx], pixels, diffraction,
-                   voxel_length)
+                   voxel_length, point=idx)
 
     ##### -------------------------------------------------------------- #####
 
