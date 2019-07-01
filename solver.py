@@ -109,7 +109,19 @@ def save_images(data, idx):
                          dtype=data.image.dtype)
 
 
-@task(replicable=True)
+@task(privileges=[RW], leaf=True)
+def load_pixels(pixels):
+    beam = ps.Beam('data/exp_chuck.beam')
+    det = ps.PnccdDetector(
+        geom='data/lcls/amo86615/PNCCD::CalibV1/Camp.0:pnCCD.1/'
+             'geometry/0-end.data',
+        beam=beam)
+    pixel_momentum = det.pixel_position_reciprocal
+    numpy.copyto(pixels.momentum, det.pixel_position_reciprocal, casting='no')
+    max_pixel_dist = numpy.max(det.pixel_distance_reciprocal)
+    return max_pixel_dist
+
+@task(replicable=True, inner=True)
 def solve(n_runs):
     n_procs = legion.Tunable.select(legion.Tunable.GLOBAL_PYS).get()
     print(f"Working with {n_procs} processes\n")
@@ -142,17 +154,10 @@ def solve(n_runs):
     legion.fill(reconstruction, 'rho', 0.)
 
     # Load pixel momentum
-    beam = ps.Beam('data/exp_chuck.beam')
-    det = ps.PnccdDetector(
-        geom='data/lcls/amo86615/PNCCD::CalibV1/Camp.0:pnCCD.1/'
-             'geometry/0-end.data',
-        beam=beam)
-    pixel_momentum = det.pixel_position_reciprocal
     pixels = legion.Region.create(
         event_raw_shape + (3,), {'momentum': legion.float64})
     legion.fill(pixels, 'momentum', 0.)
-    numpy.copyto(pixels.momentum, det.pixel_position_reciprocal, casting='no')
-    max_pixel_dist = numpy.max(det.pixel_distance_reciprocal)
+    max_pixel_dist = load_pixels(pixels).get()
     voxel_length = 2 * max_pixel_dist / (N_POINTS - 1)
 
     complete = False
