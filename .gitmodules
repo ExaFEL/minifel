@@ -1,6 +1,6 @@
 [submodule "phaseret"]
 	path = setup/phaseret
-	url = git@github.com:AntoineDujardin/phaseret.git
+	url = git@github.com:ExaFEL/phaseret.git
 [submodule "setup/pysingfel"]
 	path = setup/pysingfel
 	url = git@github.com:AntoineDujardin/pysingfel.git
