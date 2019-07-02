@@ -42,14 +42,10 @@ root_dir = os.path.dirname(os.path.realpath(__file__))
 data_dir = os.path.join(root_dir, 'data', 'wangzy')
 
 
-@task(privileges=[R, R, R, Reduce('+')], leaf=True)
-def preprocess(images, orientations, pixels, diffraction, voxel_length):
-    print("Aligning")
-    # BUG: We are currently re-accumulating the same data every-time
-
-    for l in range(orientations.orientation.shape[0]):
-        if numpy.allclose(orientations.orientation[l], 0.):
-            continue
+@task(privileges=[R, R, R, R, Reduce('+')], leaf=True)
+def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
+    print(f"Aligning")
+    for l in range(active.active[0]):
         ps.merge_slice(
             images.image[l], pixels.momentum, orientations.orientation[l],
             diffraction.accumulator, diffraction.weight, voxel_length,
@@ -133,12 +129,16 @@ def solve(n_runs):
         (n_events_per_node * n_procs,) + event_raw_shape, {'image': legion.float64})
     orientations = legion.Region.create(
         (n_events_per_node * n_procs, 4), {'orientation': legion.float32})
+    active = legion.Region.create((n_procs,), {'active': legion.uint32})
     legion.fill(images, 'image', 0)
     legion.fill(orientations, 'orientation', 0)
+    legion.fill(active, 'active', 0)
     images_part = legion.Partition.create_by_restriction(
         images, [n_procs], numpy.eye(4, 1) * n_events_per_node, (n_events_per_node,) + event_raw_shape)
     orient_part = legion.Partition.create_by_restriction(
         orientations, [n_procs], numpy.eye(2, 1) * n_events_per_node, (n_events_per_node, 4))
+    active_part = legion.Partition.create_by_restriction(
+        active, [n_procs], numpy.eye(1, 1), (1,))
 
     volume_shape = (N_POINTS,) * 3
     diffraction = legion.Region.create(volume_shape, {
@@ -169,12 +169,12 @@ def solve(n_runs):
             with legion.MustEpochLaunch([n_procs]):
                 for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
                     data_collector.fill_data_region(
-                        images_part[idx], orient_part[idx], point=idx)
+                        images_part[idx], orient_part[idx], active_part[idx], point=idx)
 
-        # # Preprocess data.
-        # for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-        #     preprocess(images_part[idx], orient_part[idx], pixels, diffraction,
-        #                voxel_length)
+        # Preprocess data.
+        for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
+            preprocess(images_part[idx], orient_part[idx], active_part[idx], pixels, diffraction,
+                       voxel_length, point=idx)
 
         # # Run solver.
         # solve_step(diffraction, reconstruction, 0, iteration)
@@ -190,17 +190,9 @@ def solve(n_runs):
 
         iteration += 1
 
-
-    ##### Currently preprocessing at the end to avoid doing it too often #####
-
-    # Preprocess data.
-    for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-        preprocess(images_part[idx], orient_part[idx], pixels, diffraction,
-                   voxel_length, point=idx)
-
     ##### -------------------------------------------------------------- #####
 
-    for idx in range(n_procs):
-        save_images(images_part[idx], idx, point=idx)
+    # for idx in range(n_procs):
+    #     save_images(images_part[idx], idx, point=idx)
     save_rho(reconstruction, 0)
     save_diffraction(diffraction, 0)

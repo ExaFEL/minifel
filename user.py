@@ -36,7 +36,7 @@ import numpy as np
 from numpy import fft
 
 
-@task(top_level=True, replicable=True)
+@task(top_level=True)
 def main():
     limit = int(os.environ['LIMIT']) if 'LIMIT' in os.environ else None
 

@@ -42,7 +42,7 @@ def load_event_data(event, det):
     orientation = event._dgrams[0].pnccd[0].raw.orientation
 
     with data_lock:
-        data_store.append((event, image, orientation))
+        data_store.append((image, orientation))
         n_events_ready += 1
 
 
@@ -77,18 +77,18 @@ def reset_data():
         n_events_used = 0
 
 
-@task(privileges=[RW, RW], leaf=True)
-def fill_data_region(images, orientations):
+@task(privileges=[RW, RW, RW], leaf=True)
+def fill_data_region(images, orientations, active):
     global data_store, n_events_used
     with data_lock:
         raw, used, ready = data_store, n_events_used, n_events_ready
         data_store = []
         n_events_used = ready
 
-    for idx in range(used, ready):
-        numpy.copyto(images.image[idx,:,:,:], raw[idx - used][1], casting='no')
-        numpy.copyto(orientations.orientation[idx,:], raw[idx - used][2],
-                     casting='no')
+    for idx in range(ready - used):
+        numpy.copyto(images.image[idx,:,:,:], raw[idx][0], casting='no')
+        numpy.copyto(orientations.orientation[idx,:], raw[idx][1], casting='no')
+    active.active[0] = ready - used
 
     if ready != used:
         print(f"Filled {ready-used} new events.")
