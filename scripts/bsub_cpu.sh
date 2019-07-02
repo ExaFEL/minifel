@@ -15,7 +15,10 @@ export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$root_dir/native_kernels/build"
 export PYTHONPATH="$PYTHONPATH:$root_dir"
 export PS_PARALLEL=legion
 
-export DATA_DIR=$MEMBERWORK/chm137/mona_small_data
+export DATA_DIR=$MEMBERWORK/chm137/align_data
+
+export OUT_DIR=$MEMBERWORK/chm137/minifel_output
+mkdir -p $OUT_DIR
 
 export LIMIT=10
 
@@ -32,6 +35,6 @@ nodes=$(( ( LSB_MAX_NUM_PROCESSORS - 1 ) / 42 ))
 # CuPy tries to store its cache in ~/.cupy
 # export HOME=$MEMBERWORK/chm137/run
 # mkdir -p $HOME
-export HOME=/mnt/bb/$USER
+export CUPY_CACHE_DIR=/mnt/bb/$USER/.cupy/kernel_cache
 
-time jsrun -n $(( nodes * 2 )) --rs_per_host 2 --tasks_per_rs 1 --cpu_per_rs 21 --gpu_per_rs 1 --bind rs "$root_dir"/scripts/pick_hcas.py legion_python user -ll:py 1 -ll:cpu 1 -level announce=2
+time jsrun -n $(( nodes * 2 )) --rs_per_host 2 --tasks_per_rs 1 --cpu_per_rs 21 --gpu_per_rs 1 --bind rs "$root_dir"/scripts/pick_hcas.py legion_python user -ll:py 1 -ll:cpu 1 -ll:csize 8192 -level announce=2

@@ -16,6 +16,9 @@ export CXX=g++
 export USE_CUDA=${USE_CUDA:-0}
 export USE_GASNET=${USE_GASNET:-1}
 export CONDUIT=${CONDUIT:-ibv}
+
+# for Numba
+export CUDA_HOME=\$OLCF_CUDA_ROOT
 EOF
 elif [[ $(hostname) = "cori"* ]]; then
     cat > env.sh <<EOF
@@ -153,7 +156,9 @@ conda create -y -p "$CONDA_ENV_DIR" "${PACKAGE_LIST[@]}"
 # sed s/PYTHONVER/$PYVER/ relmanage/env_create.yaml > temp_env_create.yaml
 # conda env create -p "$CONDA_ENV_DIR" -f temp_env_create.yaml
 conda activate "$CONDA_ENV_DIR"
+# Other psana dependencies that live in the non-default channel.
 conda install -y amityping -c lcls-ii
+conda install -y bitstruct -c conda-forge
 
 # Workaround for mpi4py not being built with the right MPI.
 if [[ $(hostname --fqdn) = *"summit"* ]]; then

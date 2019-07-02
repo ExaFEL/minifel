@@ -11,9 +11,9 @@ export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$root_dir/native_kernels/build:$CONDA_E
 export PS_PARALLEL=legion
 
 export KERNEL_KIND=sum
-export LIMIT=10
+export LIMIT=100
 
-export DATA_DIR="${DATA_DIR:-$root_dir/../data/marc}"
+export DATA_DIR="${DATA_DIR:-/reg/d/psdm/xpp/xpptut15/scratch/dujardin/minifel/01/}"
 if [[ ! -d $DATA_DIR ]]; then
     echo "DATA_DIR is not set or does not exist. Please check it and rerun."
     false
