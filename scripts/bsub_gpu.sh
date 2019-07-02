@@ -27,4 +27,4 @@ export no_proxy='localhost,127.0.0.0/8,*.ccs.ornl.gov,*.ncrc.gov'
 
 nodes=$(( ( LSB_MAX_NUM_PROCESSORS - 1 ) / 42 ))
 
-jsrun -n $(( nodes * 2 )) --rs_per_host 2 --tasks_per_rs 1 --cpu_per_rs 21 --gpu_per_rs 3 --bind rs --smpiargs="-x PAMI_DISABLE_CUDA_HOOK=1 -disable_gpu_hooks" ./pick_hcas.py legion_python user.py -ll:py 1 -ll:cpu 0 -ll:gpu 1
+jsrun -n $(( nodes * 2 )) --rs_per_host 2 --tasks_per_rs 1 --cpu_per_rs 21 --gpu_per_rs 3 --bind rs --smpiargs="-x PAMI_DISABLE_CUDA_HOOK=1 -disable_gpu_hooks" ./pick_hcas.py legion_python main -ll:py 1 -ll:cpu 0 -ll:gpu 1

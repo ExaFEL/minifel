@@ -20,4 +20,4 @@ export LIMIT=10
 
 nodes=$SLURM_JOB_NUM_NODES
 
-srun -n $nodes -N $nodes --ntasks-per-node 1 --cpu_bind none legion_python user.py -ll:py 1 -ll:cpu 1
+srun -n $nodes -N $nodes --ntasks-per-node 1 --cpu_bind none legion_python main -ll:py 1 -ll:cpu 1
