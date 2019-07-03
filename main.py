@@ -28,7 +28,7 @@ legion.is_script = old_is_script
 
 import os
 
-import native_tasks
+# import native_tasks
 import data_collector
 import solver
 

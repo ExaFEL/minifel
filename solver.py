@@ -19,7 +19,7 @@ from __future__ import print_function
 
 import h5py as h5
 import legion
-from legion import task, R, RW, Reduce
+from legion import task, R, RW, Reduce, ID
 import numpy
 from numpy import fft
 import os
@@ -167,14 +167,15 @@ def solve(n_runs):
         if not complete:
             # Obtain the newest copy of the data.
             with legion.MustEpochLaunch([n_procs]):
-                for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-                    data_collector.fill_data_region(
-                        images_part[idx], orient_part[idx], active_part[idx], point=idx)
+                legion.index_launch(
+                    [n_procs], data_collector.fill_data_region,
+                    images_part[ID], orient_part[ID], active_part[ID])
 
         # Preprocess data.
-        for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-            preprocess(images_part[idx], orient_part[idx], active_part[idx], pixels, diffraction,
-                       voxel_length, point=idx)
+        legion.index_launch(
+            [n_procs], preprocess,
+            images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
+            voxel_length)
 
         # # Run solver.
         # solve_step(diffraction, reconstruction, 0, iteration)
