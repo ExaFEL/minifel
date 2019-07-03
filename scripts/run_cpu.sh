@@ -13,7 +13,11 @@ export PS_PARALLEL=legion
 export KERNEL_KIND=sum
 export LIMIT=100
 
-export DATA_DIR="${DATA_DIR:-/reg/d/psdm/xpp/xpptut15/scratch/dujardin/minifel/01/}"
+if [[ $(hostname) = "sapling"* ]]; then
+    export DATA_DIR=/scratch/oldhome/$(whoami)/align_data
+else
+    export DATA_DIR="${DATA_DIR:-/reg/d/psdm/xpp/xpptut15/scratch/dujardin/minifel/01/}"
+fi
 if [[ ! -d $DATA_DIR ]]; then
     echo "DATA_DIR is not set or does not exist. Please check it and rerun."
     false
@@ -23,6 +27,10 @@ export OUT_DIR="${OUT_DIR:-$root_dir/../output}"
 if [[ ! -d $DATA_DIR ]]; then
     echo "OUT_DIR is not set or does not exist. Please check it and rerun."
     false
+fi
+
+if [[ $(hostname) = "sapling"* ]]; then
+    export CUDA_HOME=$CUDA
 fi
 
 # legion_python main -ll:py 1 -ll:cpu 1 -level announce=2
