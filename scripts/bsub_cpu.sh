@@ -37,4 +37,7 @@ nodes=$(( ( LSB_MAX_NUM_PROCESSORS - 1 ) / 42 ))
 # mkdir -p $HOME
 export CUPY_CACHE_DIR=/mnt/bb/$USER/.cupy/kernel_cache
 
-time jsrun -n $(( nodes * 2 )) --rs_per_host 2 --tasks_per_rs 1 --cpu_per_rs 21 --gpu_per_rs 1 --bind rs "$root_dir"/scripts/pick_hcas.py legion_python main -ll:py 1 -ll:cpu 1 -ll:csize 8192 -level announce=2
+export OMP_NUM_THREADS=1 # attempt to disable NumPy use of threads
+
+time jsrun -n $(( nodes * 2 )) --rs_per_host 2 --tasks_per_rs 1 --cpu_per_rs 21 --gpu_per_rs 1 --bind rs "$root_dir"/scripts/pick_hcas.py legion_python main -ll:py 1 -ll:cpu 1 -ll:csize 8192 -level announce=2 -ll:force_kthreads 1
+# -hl:prof $(( nodes * 2 )) -hl:prof_logfile $OUT_DIR/prof_%.gz

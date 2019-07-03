@@ -49,17 +49,3 @@ sum_task = legion.extern_task(task_id=sum_task_id, privileges=[legion.RO], retur
 #     print('WARNING: unable to set mapper in script mode')
 # else:
 #     c.register_lifeline_mapper()
-
-kernel_kind = os.environ.get('KERNEL_KIND')
-kernel_uses_raw = False
-if kernel_kind == 'memory':
-    kernel = memory_bound_task
-elif kernel_kind == 'cachex':
-    kernel = cache_bound_task
-elif kernel_kind == 'sum':
-    kernel_uses_raw = True
-    kernel = sum_task
-elif kernel_kind is None:
-    kernel = None
-else:
-    raise Exception('Unrecognized kernel kind: %s' % kernel_kind)

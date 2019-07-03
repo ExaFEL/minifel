@@ -19,7 +19,7 @@ from __future__ import print_function
 
 import h5py as h5
 import legion
-from legion import task, R, RW, Reduce
+from legion import task, R, RW, Reduce, ID
 import numpy
 from numpy import fft
 import os
@@ -44,12 +44,13 @@ data_dir = os.path.join(root_dir, 'data', 'wangzy')
 
 @task(privileges=[R, R, R, R, Reduce('+')], leaf=True)
 def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
-    print(f"Aligning")
+    print(f"Aligning", flush=True)
     for l in range(active.active[0]):
         ps.merge_slice(
             images.image[l], pixels.momentum, orientations.orientation[l],
             diffraction.accumulator, diffraction.weight, voxel_length,
             inverse=False)
+    print(f"Finished Aligning", flush=True)
 
 
 @task(privileges=[R, RW], leaf=True)
@@ -59,7 +60,7 @@ def solve_step(diffraction, reconstruction, rank, iteration):
                                  reconstruction.rho, True)
 
     if iteration == 0:
-        print(f"Initializing rank #{rank}")
+        print(f"Initializing rank #{rank}", flush=True)
         initial_state.generate_support_from_autocorrelation()
         initial_state.generate_random_rho()
 
@@ -70,7 +71,7 @@ def solve_step(diffraction, reconstruction, rank, iteration):
 
     err_Fourier = phaser.get_reciprocal_errs()[-1]
     err_real = phaser.get_real_errs()[-1]
-    print(f"Errors: {err_Fourier:.5f}, {err_real:.5f}")
+    print(f"Errors: {err_Fourier:.5f}, {err_real:.5f}", flush=True)
 
     numpy.copyto(reconstruction.support, phaser.get_support(True),
                  casting='no')
@@ -79,7 +80,7 @@ def solve_step(diffraction, reconstruction, rank, iteration):
 
 @task(privileges=[R], leaf=True)
 def save_diffraction(diffraction, idx):
-    print("Saving diffraction...")
+    print("Saving diffraction...", flush=True)
     with h5.File(os.environ['OUT_DIR'] + f'/amplitude-{idx}.hdf5', 'w') as f:
         f.create_dataset("accumulator", shape=diffraction.accumulator.shape,
                          data=diffraction.accumulator,
@@ -91,7 +92,7 @@ def save_diffraction(diffraction, idx):
 
 @task(privileges=[R], leaf=True)
 def save_rho(data, idx):
-    print("Saving density...")
+    print("Saving density...", flush=True)
     with h5.File(os.environ['OUT_DIR'] + f'/rho-{idx}.hdf5', 'w') as f:
         f.create_dataset("rho", shape=data.rho.shape,
                          data=data.rho, dtype=data.rho.dtype)
@@ -99,7 +100,7 @@ def save_rho(data, idx):
 
 @task(privileges=[R], leaf=True)
 def save_images(data, idx):
-    print("Saving images...")
+    print("Saving images...", flush=True)
     with h5.File(os.environ['OUT_DIR'] + f'/images-{idx}.hdf5', 'w') as f:
         f.create_dataset("images", shape=data.image.shape, data=data.image,
                          dtype=data.image.dtype)
@@ -117,10 +118,10 @@ def load_pixels(pixels):
     max_pixel_dist = numpy.max(det.pixel_distance_reciprocal)
     return max_pixel_dist
 
-@task(replicable=True, inner=True)
+@task(inner=True) # replicable=True, 
 def solve(n_runs):
     n_procs = legion.Tunable.select(legion.Tunable.GLOBAL_PYS).get()
-    print(f"Working with {n_procs} processes\n")
+    print(f"Working with {n_procs} processes\n", flush=True)
 
     # Allocate data structures.
     n_events_per_node = 100
@@ -167,14 +168,21 @@ def solve(n_runs):
         if not complete:
             # Obtain the newest copy of the data.
             with legion.MustEpochLaunch([n_procs]):
-                for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-                    data_collector.fill_data_region(
-                        images_part[idx], orient_part[idx], active_part[idx], point=idx)
+                # for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
+                #     data_collector.fill_data_region(
+                #         images_part[idx], orient_part[idx], active_part[idx], point=idx)
+                legion.index_launch(
+                    [n_procs], data_collector.fill_data_region,
+                    images_part[ID], orient_part[ID], active_part[ID])
 
         # Preprocess data.
-        for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-            preprocess(images_part[idx], orient_part[idx], active_part[idx], pixels, diffraction,
-                       voxel_length, point=idx)
+        # for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
+        #     preprocess(images_part[idx], orient_part[idx], active_part[idx], pixels, diffraction,
+        #                voxel_length, point=idx)
+        legion.index_launch(
+            [n_procs], preprocess,
+            images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
+            voxel_length)
 
         # # Run solver.
         # solve_step(diffraction, reconstruction, 0, iteration)
