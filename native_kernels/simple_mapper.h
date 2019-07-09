@@ -13,19 +13,19 @@
  * limitations under the License.
  */
 
-#ifndef __LIFELINE_MAPPER_H__
-#define __LIFELINE_MAPPER_H__
+#ifndef __SIMPLE_MAPPER_H__
+#define __SIMPLE_MAPPER_H__
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-  
-void preregister_lifeline_mapper();
 
-void register_lifeline_mapper();
-  
+void preregister_simple_mapper();
+
+void register_simple_mapper();
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif // __LIFELINE_MAPPER_H__
+#endif // __SIMPLE_MAPPER_H__

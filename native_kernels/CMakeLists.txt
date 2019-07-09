@@ -8,6 +8,7 @@ list(APPEND NATIVE_KERNELS_SRC
   native_kernels.cc        native_kernels.h
   native_kernels_helper.cc native_kernels_helper.h
   native_kernels_tasks.cc  native_kernels_tasks.h
+  simple_mapper.cc         simple_mapper.h
 )
 
 if(Legion_USE_CUDA)

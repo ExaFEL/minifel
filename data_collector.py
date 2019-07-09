@@ -65,8 +65,7 @@ def load_run_data(run):
 
     n_procs = legion.Tunable.select(legion.Tunable.GLOBAL_PYS).get()
     with legion.MustEpochLaunch([n_procs]):
-        for idx in range(n_procs): # legion.IndexLaunch([n_procs]): # FIXME: index launch
-            mark_completion(f, point=idx)
+        legion.index_launch([n_procs], mark_completion, f)
 
 
 def reset_data():

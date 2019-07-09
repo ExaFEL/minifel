@@ -117,7 +117,7 @@ def load_pixels(pixels):
     max_pixel_dist = numpy.max(det.pixel_distance_reciprocal)
     return max_pixel_dist
 
-@task(replicable=True, inner=True)
+@task(inner=True) # replicable=True, # FIXME: Can't replicate both this and main
 def solve(n_runs):
     n_procs = legion.Tunable.select(legion.Tunable.GLOBAL_PYS).get()
     print(f"Working with {n_procs} processes\n")
@@ -177,8 +177,8 @@ def solve(n_runs):
             images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
             voxel_length)
 
-        # # Run solver.
-        # solve_step(diffraction, reconstruction, 0, iteration)
+        # Run solver.
+        solve_step(diffraction, reconstruction, 0, iteration)
 
         if not complete:
             # Make sure we don't run more than 2 iterations ahead.

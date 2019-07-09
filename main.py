@@ -28,7 +28,7 @@ legion.is_script = old_is_script
 
 import os
 
-# import native_tasks
+import native_tasks
 import data_collector
 import solver
 
@@ -36,7 +36,7 @@ import numpy as np
 from numpy import fft
 
 
-@task(top_level=True)
+@task(top_level=True, replicable=True)
 def main():
     limit = int(os.environ['LIMIT']) if 'LIMIT' in os.environ else None
 
