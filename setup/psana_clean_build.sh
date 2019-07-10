@@ -9,4 +9,4 @@ pushd $LCLS2_DIR
 git clean -fxd
 popd
 
-./psana_dirty_build.sh
+"$root_dir"/psana_dirty_build.sh
