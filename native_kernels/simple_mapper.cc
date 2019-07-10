@@ -46,15 +46,17 @@ Processor SimpleMapper::default_policy_select_initial_processor(
     switch (info.proc_kind)
     {
       case Processor::LOC_PROC:
-        return default_get_next_local_cpu();
+        return default_get_next_global_cpu();
       case Processor::TOC_PROC:
-        return default_get_next_local_gpu();
+        return default_get_next_global_gpu();
       case Processor::IO_PROC:
-        return default_get_next_local_io();
+        return default_get_next_global_io();
       case Processor::OMP_PROC:
-        return default_get_next_local_omp();
+        return default_get_next_global_omp();
       case Processor::PY_PROC:
-        return default_get_next_local_py();
+        return default_get_next_global_py();
+      default:
+        assert(false);
     }
   }
 
