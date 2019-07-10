@@ -44,7 +44,7 @@ data_dir = os.path.join(root_dir, 'data', 'wangzy')
 
 @task(privileges=[R, R, R, R, Reduce('+')], leaf=True)
 def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
-    print(f"Aligning")
+    print(f"Aligning {active.active[0]} events")
     for l in range(active.active[0]):
         ps.merge_slice(
             images.image[l], pixels.momentum, orientations.orientation[l],
@@ -163,7 +163,7 @@ def solve(n_runs):
     complete = False
     iteration = 0
     fences = []
-    while not complete or iteration < 10:
+    while not complete or iteration < 20:
         if not complete:
             # Obtain the newest copy of the data.
             with legion.MustEpochLaunch([n_procs]):
@@ -171,11 +171,11 @@ def solve(n_runs):
                     [n_procs], data_collector.fill_data_region,
                     images_part[ID], orient_part[ID], active_part[ID])
 
-        # Preprocess data.
-        legion.index_launch(
-            [n_procs], preprocess,
-            images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
-            voxel_length)
+            # Preprocess data.
+            legion.index_launch(
+                [n_procs], preprocess,
+                images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
+                voxel_length)
 
         # Run solver.
         solve_step(diffraction, reconstruction, 0, iteration)
