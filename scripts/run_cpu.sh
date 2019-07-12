@@ -11,7 +11,7 @@ export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$root_dir/native_kernels/build:$CONDA_E
 export PS_PARALLEL=legion
 
 export KERNEL_KIND=sum
-export LIMIT=100
+export LIMIT=500
 
 if [[ $(hostname) = "sapling"* ]]; then
     export DATA_DIR=/scratch/oldhome/$(whoami)/align_data
@@ -34,4 +34,4 @@ if [[ $(hostname) = "sapling"* ]]; then
 fi
 
 # legion_python main -ll:py 1 -ll:cpu 1 -level announce=2
-mpirun -n 2 legion_python main -ll:py 1 -ll:cpu 1 -ll:csize 8192 -level announce=2
+mpirun -n 5 legion_python main -ll:py 1 -ll:cpu 1 -ll:csize 8192 -level announce=2

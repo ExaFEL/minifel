@@ -32,9 +32,6 @@ import native_tasks
 import data_collector
 import solver
 
-import numpy as np
-from numpy import fft
-
 
 @task(top_level=True, replicable=True)
 def main():

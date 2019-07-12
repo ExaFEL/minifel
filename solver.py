@@ -36,10 +36,7 @@ import pysingfel as ps
 ###
 
 
-N_POINTS = 151
-
-root_dir = os.path.dirname(os.path.realpath(__file__))
-data_dir = os.path.join(root_dir, 'data', 'wangzy')
+N_POINTS = 201
 
 
 @task(privileges=[R, R, R, R, Reduce('+')], leaf=True)
@@ -53,24 +50,30 @@ def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
 
 
 @task(privileges=[R, RW], leaf=True)
-def solve_step(diffraction, reconstruction, rank, iteration):
-    amplitude = diffraction.accumulator / diffraction.weight
+def solve_step(diffraction, reconstruction, rank, iteration,
+               hio_iter, hio_beta, er_iter, sw_thresh):
+    numpy.seterr(invalid='ignore', divide='ignore')
+    amplitude = numpy.nan_to_num(fft.ifftshift(
+        (diffraction.accumulator + diffraction.accumulator[::-1,::-1,::-1])
+        / (diffraction.weight + diffraction.weight[::-1,::-1,::-1])))
     initial_state = InitialState(amplitude, reconstruction.support,
                                  reconstruction.rho, True)
 
     if iteration == 0:
         print(f"Initializing rank #{rank}")
-        initial_state.generate_support_from_autocorrelation()
+        initial_state.generate_support_from_autocorrelation(rel_threshold=0.25)
         initial_state.generate_random_rho()
 
     phaser = Phaser(initial_state, monitor='last')
-    phaser.HIO_loop(2, .1)
-    phaser.ER_loop(2)
-    phaser.shrink_wrap(.01)
+    phaser.ER_loop(er_iter)
+    phaser.HIO_loop(hio_iter, hio_beta)
+    phaser.ER_loop(er_iter)
+    phaser.shrink_wrap(sw_thresh)
 
     err_Fourier = phaser.get_reciprocal_errs()[-1]
     err_real = phaser.get_real_errs()[-1]
-    print(f"Errors: {err_Fourier:.5f}, {err_real:.5f}")
+    print(f"Rank #{rank}, iter #{iteration} -- "
+          f"errors: {err_Fourier:.5f}, {err_real:.5f}")
 
     numpy.copyto(reconstruction.support, phaser.get_support(True),
                  casting='no')
@@ -94,7 +97,7 @@ def save_rho(data, idx):
     print("Saving density...")
     with h5.File(os.environ['OUT_DIR'] + f'/rho-{idx}.hdf5', 'w') as f:
         f.create_dataset("rho", shape=data.rho.shape,
-                         data=data.rho, dtype=data.rho.dtype)
+                         data=fft.fftshift(data.rho), dtype=data.rho.dtype)
 
 
 @task(privileges=[R], leaf=True)
@@ -116,6 +119,7 @@ def load_pixels(pixels):
     numpy.copyto(pixels.momentum, det.pixel_position_reciprocal, casting='no')
     max_pixel_dist = numpy.max(det.pixel_distance_reciprocal)
     return max_pixel_dist
+
 
 @task(inner=True) # replicable=True, # FIXME: Can't replicate both this and main
 def solve(n_runs):
@@ -147,11 +151,15 @@ def solve(n_runs):
     legion.fill(diffraction, 'accumulator', 0.)
     legion.fill(diffraction, 'weight', 0.)
 
-    reconstruction = legion.Region.create(volume_shape, {
-        'support': legion.bool_,
-        'rho': legion.complex64})
-    legion.fill(reconstruction, 'support', False)
-    legion.fill(reconstruction, 'rho', 0.)
+    n_reconstructions = 4
+    reconstructions = []
+    for i in range(n_reconstructions):
+        reconstruction = legion.Region.create(volume_shape, {
+            'support': legion.bool_,
+            'rho': legion.complex64})
+        legion.fill(reconstruction, 'support', False)
+        legion.fill(reconstruction, 'rho', 0.)
+        reconstructions.append(reconstruction)
 
     # Load pixel momentum
     pixels = legion.Region.create(
@@ -163,7 +171,7 @@ def solve(n_runs):
     complete = False
     iteration = 0
     fences = []
-    while not complete or iteration < 20:
+    while not complete or iteration < 50:
         if not complete:
             # Obtain the newest copy of the data.
             with legion.MustEpochLaunch([n_procs]):
@@ -178,7 +186,17 @@ def solve(n_runs):
                 voxel_length)
 
         # Run solver.
-        solve_step(diffraction, reconstruction, 0, iteration)
+        assert n_reconstructions == 4
+        hio_loop = 100
+        er_loop = hio_loop // 2
+        solve_step(diffraction, reconstructions[0], 0, iteration,
+                   hio_loop, .1, er_loop, .14)
+        solve_step(diffraction, reconstructions[1], 1, iteration,
+                   hio_loop, .05, er_loop, .14)
+        solve_step(diffraction, reconstructions[2], 2, iteration,
+                   hio_loop, .1, er_loop, .16)
+        solve_step(diffraction, reconstructions[3], 3, iteration,
+                   hio_loop, .05, er_loop, .16)
 
         if not complete:
             # Make sure we don't run more than 2 iterations ahead.
@@ -195,5 +213,6 @@ def solve(n_runs):
 
     # for idx in range(n_procs):
     #     save_images(images_part[idx], idx, point=idx)
-    save_rho(reconstruction, 0)
+    for i in range(n_reconstructions):
+        save_rho(reconstructions[i], i)
     save_diffraction(diffraction, 0)
