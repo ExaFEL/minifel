@@ -18,7 +18,7 @@
 from __future__ import print_function
 
 import legion
-from legion import task, RW
+from legion import index_launch, task, MustEpochLaunch, RW, Tunable
 import numpy
 from numpy import fft
 import os
@@ -63,9 +63,9 @@ def load_run_data(run):
     f = run.analyze(event_fn=load_event_data, det=det)
     legion.is_script = old_is_script
 
-    n_procs = legion.Tunable.select(legion.Tunable.GLOBAL_PYS).get()
-    with legion.MustEpochLaunch([n_procs]):
-        legion.index_launch([n_procs], mark_completion, f)
+    n_procs = Tunable.select(Tunable.GLOBAL_PYS).get()
+    with MustEpochLaunch([n_procs]):
+        index_launch([n_procs], mark_completion, f)
 
 
 def reset_data():

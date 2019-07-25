@@ -19,7 +19,7 @@ from __future__ import print_function
 
 import h5py as h5
 import legion
-from legion import task, R, RW, Reduce, ID
+from legion import index_launch, task, ID, MustEpochLaunch, Partition, R, Reduce, Region, RW, Tunable
 import numpy
 from numpy import fft
 import os
@@ -123,29 +123,29 @@ def load_pixels(pixels):
 
 @task(inner=True) # replicable=True, # FIXME: Can't replicate both this and main
 def solve(n_runs):
-    n_procs = legion.Tunable.select(legion.Tunable.GLOBAL_PYS).get()
+    n_procs = Tunable.select(Tunable.GLOBAL_PYS).get()
     print(f"Working with {n_procs} processes\n")
 
     # Allocate data structures.
     n_events_per_node = 100
     event_raw_shape = (4, 512, 512)
-    images = legion.Region.create(
+    images = Region(
         (n_events_per_node * n_procs,) + event_raw_shape, {'image': legion.float64})
-    orientations = legion.Region.create(
+    orientations = Region(
         (n_events_per_node * n_procs, 4), {'orientation': legion.float32})
-    active = legion.Region.create((n_procs,), {'active': legion.uint32})
+    active = Region((n_procs,), {'active': legion.uint32})
     legion.fill(images, 'image', 0)
     legion.fill(orientations, 'orientation', 0)
     legion.fill(active, 'active', 0)
-    images_part = legion.Partition.create_by_restriction(
+    images_part = Partition.restrict(
         images, [n_procs], numpy.eye(4, 1) * n_events_per_node, (n_events_per_node,) + event_raw_shape)
-    orient_part = legion.Partition.create_by_restriction(
+    orient_part = Partition.restrict(
         orientations, [n_procs], numpy.eye(2, 1) * n_events_per_node, (n_events_per_node, 4))
-    active_part = legion.Partition.create_by_restriction(
+    active_part = Partition.restrict(
         active, [n_procs], numpy.eye(1, 1), (1,))
 
     volume_shape = (N_POINTS,) * 3
-    diffraction = legion.Region.create(volume_shape, {
+    diffraction = Region(volume_shape, {
         'accumulator': legion.float32,
         'weight': legion.float32})
     legion.fill(diffraction, 'accumulator', 0.)
@@ -154,7 +154,7 @@ def solve(n_runs):
     n_reconstructions = 4
     reconstructions = []
     for i in range(n_reconstructions):
-        reconstruction = legion.Region.create(volume_shape, {
+        reconstruction = Region(volume_shape, {
             'support': legion.bool_,
             'rho': legion.complex64})
         legion.fill(reconstruction, 'support', False)
@@ -162,8 +162,7 @@ def solve(n_runs):
         reconstructions.append(reconstruction)
 
     # Load pixel momentum
-    pixels = legion.Region.create(
-        event_raw_shape + (3,), {'momentum': legion.float64})
+    pixels = Region(event_raw_shape + (3,), {'momentum': legion.float64})
     legion.fill(pixels, 'momentum', 0.)
     max_pixel_dist = load_pixels(pixels).get()
     voxel_length = 2 * max_pixel_dist / (N_POINTS - 1)
@@ -174,13 +173,13 @@ def solve(n_runs):
     while not complete or iteration < 50:
         if not complete:
             # Obtain the newest copy of the data.
-            with legion.MustEpochLaunch([n_procs]):
-                legion.index_launch(
+            with MustEpochLaunch([n_procs]):
+                index_launch(
                     [n_procs], data_collector.fill_data_region,
                     images_part[ID], orient_part[ID], active_part[ID])
 
             # Preprocess data.
-            legion.index_launch(
+            index_launch(
                 [n_procs], preprocess,
                 images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
                 voxel_length)
