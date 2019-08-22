@@ -150,7 +150,7 @@ if [[ $(hostname --fqdn) != *"summit"* && $(hostname) != "cori"* && $(hostname) 
         mpi4py
     )
 fi
-conda create -y -p "$CONDA_ENV_DIR" "${PACKAGE_LIST[@]}"
+conda create -y -p "$CONDA_ENV_DIR" "${PACKAGE_LIST[@]}" -c defaults -c anaconda
 # FIXME: Can't do this on Summit since not all the packages are available....
 # git clone https://github.com/slac-lcls/relmanage.git
 # sed s/PYTHONVER/$PYVER/ relmanage/env_create.yaml > temp_env_create.yaml
