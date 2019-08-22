@@ -130,6 +130,7 @@ PACKAGE_LIST=(
     mongodb
     pymongo
     curl
+    gsl
     rapidjson
     ipython
     requests
