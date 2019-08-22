@@ -44,6 +44,7 @@ def main():
     # a filename.
 
     n_runs = 0
+    runs = []
     for run in ds.runs():
         # FIXME: must epoch launch
         data_collector.load_run_data(run)
@@ -52,4 +53,8 @@ def main():
 
         n_runs += 1
 
+        runs.append(run) # Keep run around to avoid having it be garbage collected.
+
     solver.solve(n_runs)
+
+    legion.execution_fence(block=True) # Block to keep runs in scope until solve completes.
