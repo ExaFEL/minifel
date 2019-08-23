@@ -170,15 +170,6 @@ elif [[ $(hostname) = "sapling" ]]; then
     MPICC=mpicc pip install -v --no-binary mpi4py mpi4py
 fi
 
-# Install phaseret.
-./install_phaseret.sh
-
-# Install pysingfel.
-./install_pysingfel.sh
-
-# Install cupy.
-./install_cupy.sh
-
 # Install Legion.
 # conda build relmanage/recipes/legion/ --output-folder channels/external/ --python $PYVER
 # conda install -y legion -c file://`pwd`/channels/external --override-channels
@@ -202,6 +193,15 @@ fi
 # Build psana.
 git clone https://github.com/slac-lcls/lcls2.git $LCLS2_DIR
 ./psana_clean_build.sh
+
+# Install phaseret.
+./install_phaseret.sh
+
+# Install pysingfel.
+./install_pysingfel.sh
+
+# Install cupy.
+./install_cupy.sh
 
 echo
 echo "Done. Please run 'source env.sh' to use this build."
