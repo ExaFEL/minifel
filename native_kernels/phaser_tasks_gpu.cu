@@ -15,16 +15,17 @@
 
 #include "legion.h"
 
-#include "native_kernels.h"
-
 #include <stdint.h>
 #include <inttypes.h>
 
 using namespace Legion;
 
+enum FieldIDs {
+  X_FIELD_ID = 1,
+};
 
 __global__
-void gpu_sum_kernel(Rect<3> rect,
+void gpu_phaser_kernel(Rect<3> rect,
                     const FieldAccessor<READ_ONLY, int16_t, 3, coord_t, Realm::AffineAccessor<int16_t, 3, coord_t> > x,
                     unsigned long long *result)
 {
@@ -43,7 +44,7 @@ void gpu_sum_kernel(Rect<3> rect,
 }
 
 __host__
-int64_t gpu_sum_task(const Task *task,
+int64_t gpu_phaser_task(const Task *task,
                      const std::vector<PhysicalRegion> &regions,
                      Context ctx, Runtime *runtime)
 {
@@ -71,7 +72,7 @@ int64_t gpu_sum_task(const Task *task,
     abort();
   }
 
-  gpu_sum_kernel<<<grid, block>>>(rect, x, gpu_result);
+  gpu_phaser_kernel<<<grid, block>>>(rect, x, gpu_result);
 
   if (cudaMemcpy(&result, gpu_result, sizeof(unsigned long long), cudaMemcpyDeviceToHost) != cudaSuccess) {
     abort();

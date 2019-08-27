@@ -5,16 +5,13 @@ find_package(Legion REQUIRED)
 
 list(APPEND NATIVE_KERNELS_SRC
   lifeline_mapper.cc       lifeline_mapper.h
-  native_kernels.cc        native_kernels.h
-  native_kernels_helper.cc native_kernels_helper.h
-  native_kernels_tasks.cc  native_kernels_tasks.h
-  simple_mapper.cc         simple_mapper.h
+  phaser_tasks.cc phaser_tasks.h
 )
 
 if(Legion_USE_CUDA)
   set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -Wno-deprecated-gpu-targets)
   list(APPEND NATIVE_KERNELS_SRC
-    native_kernels_tasks_gpu.cu
+    phaser_tasks_gpu.cu
   )
 endif()
 

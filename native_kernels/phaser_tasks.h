@@ -13,20 +13,19 @@
  * limitations under the License.
  */
 
-// Important: DO NOT include legion.h from this file; it is called
-// from both Legion and MPI
+#ifndef __NATIVE_KERNELS_TASKS_H__
+#define __NATIVE_KERNELS_TASKS_H__
 
-#include "native_kernels_helper.h"
-
-// This is separated into its own file so that the compiler doesn't
-// inline it and optimize away the computation.
-
-#if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__)
-__attribute__((target_clones("arch=knl","arch=haswell","default")))
+#ifdef __cplusplus
+extern "C" {
 #endif
-void memory_bound_helper(float * RESTRICT buffer, size_t count)
-{
-  for (size_t i = 0; i < count; i++) {
-    buffer[i] += 1.0;
-  }
+
+void preregister_phaser_tasks(int phaser_task_id);
+
+void register_phaser_tasks(int phaser_task_id);
+
+#ifdef __cplusplus
 }
+#endif
+
+#endif // __NATIVE_KERNELS_TASKS_H__
