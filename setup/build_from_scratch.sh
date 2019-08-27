@@ -10,6 +10,7 @@ if [[ $(hostname --fqdn) = *"summit"* ]]; then
     cat > env.sh <<EOF
 module load gcc/6.4.0
 module load cuda/9.2.148
+module load gsl
 export CC=gcc
 export CXX=g++
 
@@ -130,7 +131,6 @@ PACKAGE_LIST=(
     mongodb
     pymongo
     curl
-    gsl
     rapidjson
     ipython
     requests
@@ -149,6 +149,12 @@ PACKAGE_LIST=(
 if [[ $(hostname --fqdn) != *"summit"* && $(hostname) != "cori"* && $(hostname) != "sapling" ]]; then
     PACKAGE_LIST+=(
         mpi4py
+    )
+fi
+if [[ $(hostname --fqdn) != *"summit"* ]]; then
+    # no PPC64le version of this package
+    PACKAGE_LIST+=(
+        gsl
     )
 fi
 conda create -y -p "$CONDA_ENV_DIR" "${PACKAGE_LIST[@]}" -c defaults -c anaconda
