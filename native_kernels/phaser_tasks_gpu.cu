@@ -20,7 +20,10 @@
 using namespace Legion;
 
 enum FieldIDs {
-  FID_RHO = 1,
+  FID_ACCUMULATOR = 1,
+  FID_WEIGHT = 2,
+  FID_RHO = 3,
+  FID_SUPPORT = 3,
 };
 
 #if 0
@@ -44,19 +47,137 @@ void gpu_phaser_kernel(Rect<3> rect,
 }
 #endif
 
+__global__
+void phaser_kernel(cufftComplex *rho_hat, const float *amplitudes)
+{
+  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  cufftComplex rhat = rho_hat[idx];
+  float amplitude = amplitudes[idx];
+
+  float phase = atan2(rhat.x, rhat.y);
+
+  // compute the complex exponent:
+  // https://docs.scipy.org/doc/numpy/reference/generated/numpy.exp.html
+  cufftComplex exp_phase = { .x = amplitude * cos(phase), .y = amplitude * sin(phase) };
+
+  bool amp_mask = true; // FIXME
+  rho_hat[idx] = amp_mask ? exp_phase : rhat;
+}
+
+__global__
+void ER_update_kernel(cufftComplex *rho, const cufftComplex *rho_mod, const bool *support)
+{
+  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  rho[idx] = support ? rho_mod[idx] : cufftComplex { .x = 0, .y = 0 };
+}
+
+__global__
+void HIO_update_kernel(cufftComplex *rho, const cufftComplex *rho_mod, const bool *support, float beta)
+{
+  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  cufftComplex rmod = rho_mod[idx];
+  rho[idx] = support ? rmod : cufftComplex { .x = rho[idx].x - beta * rmod.x, .y = rho[idx].y - beta * rmod.y };
+}
+
+void run_phaser_kernel(cufftComplex *rho_hat, const float *amplitudes, Rect<3> rect)
+{
+  const dim3 block(256, 1, 1);
+  const dim3 grid(rect.volume() / block.x, 1, 1);
+
+  phaser_kernel<<<grid, block>>>(rho_hat, amplitudes);
+}
+
+void run_ER_update_kernel(cufftComplex *rho, const cufftComplex *rho_mod, const bool *support, Rect<3> rect)
+{
+  const dim3 block(256, 1, 1);
+  const dim3 grid(rect.volume() / block.x, 1, 1);
+
+  ER_update_kernel<<<grid, block>>>(rho, rho_mod, support);
+}
+
+void run_HIO_update_kernel(cufftComplex *rho, const cufftComplex *rho_mod, const bool *support, Rect<3> rect, float beta)
+{
+  const dim3 block(256, 1, 1);
+  const dim3 grid(rect.volume() / block.x, 1, 1);
+
+  HIO_update_kernel<<<grid, block>>>(rho, rho_mod, support, beta);
+}
+
+class FFT {
+public:
+  FFT(Rect<3> rect, const size_t *strides)
+    : rect(rect)
+    , strides(strides)
+  {
+    int n[3] = {int(rect.hi.x - rect.lo.x + 1), int(rect.hi.y - rect.lo.y + 1), int(rect.hi.z - rect.lo.z + 1)};
+
+    if (cufftPlanMany(&plan, 3, n,
+                      NULL, 1, rect.volume(),
+                      NULL, 1, rect.volume(),
+                      CUFFT_C2C, 1) != CUFFT_SUCCESS) {
+      assert(false &&"cuFFT error: Plan creation failed");
+    }
+  }
+
+  ~FFT()
+  {
+    cufftDestroy(plan);
+  }
+
+  void run(cufftComplex *input, cufftComplex *output, int direction)
+  {
+    if (cufftExecC2C(plan, input, output, direction) != CUFFT_SUCCESS) {
+      assert(false && "cuFFT error: ExecC2C Forward failed");
+    }
+
+    if (cudaDeviceSynchronize() != cudaSuccess){
+      assert(false && "CUDA error: Failed to synchronize");
+    }
+  }
+
+private:
+  Rect<3> rect;
+  const size_t *strides;
+  cufftHandle plan;
+};
+
 class Phaser {
 public:
-  __host__ Phaser(long er_iter, long hio_iter, double hio_beta,
-                  cufftComplex *rho, Rect<3> rho_rect, const size_t *rho_strides)
+  Phaser(long er_iter, long hio_iter, double hio_beta,
+         const float *accmulator, const float *weight,
+         cufftComplex *rho, bool *support, Rect<3> rect, const size_t *strides)
     : er_iter(er_iter)
     , hio_iter(hio_iter)
     , hio_beta(hio_beta)
+    , accumulator(accumulator)
+    , weight(weight)
     , rho(rho)
-    , rho_rect(rho_rect)
-    , rho_strides(rho_strides)
-  {}
+    , support(support)
+    , rect(rect)
+    , strides(strides)
+    , rho_fft(rect, strides)
+  {
+    cudaMalloc((void**)&amplitudes, sizeof(float) * rect.volume());
+    if (cudaGetLastError() != cudaSuccess) {
+      assert(false && "CUDA error: Failed to allocate");
+    }
 
-  __host__ void run()
+    cudaMalloc((void**)&rho_hat, sizeof(cufftComplex) * rect.volume());
+    if (cudaGetLastError() != cudaSuccess) {
+      assert(false && "CUDA error: Failed to allocate");
+    }
+  }
+
+  ~Phaser()
+  {
+    cudaFree(amplitudes);
+    cudaFree(rho_hat);
+  }
+
+  void run()
   {
     ER_loop();
     HIO_loop();
@@ -65,72 +186,55 @@ public:
   }
 
 private:
-  __host__ void ER_loop()
+  void ER_loop()
   {
     for (long k = 0; k < er_iter; ++k) {
       ER();
     }
   }
 
-  __host__ void ER()
+  void ER()
   {
     phase();
+    run_ER_update_kernel(rho, rho_hat, support, rect);
   }
 
-  __host__ void HIO_loop()
+  void HIO_loop()
   {
     for (long k = 0; k < hio_iter; ++k) {
       HIO();
     }
   }
 
-  __host__ void HIO()
+  void HIO()
   {
+    phase();
+    run_HIO_update_kernel(rho, rho_hat, support, rect, hio_beta);
   }
 
-  __host__ void phase()
+  void phase() // updates rho_hat
   {
-    cufftComplex *rho_hat = fft(rho, rho_rect, rho_strides);
+    rho_fft.run(rho, rho_hat, CUFFT_FORWARD);
+    run_phaser_kernel(rho_hat, amplitudes, rect);
+    rho_fft.run(rho_hat, rho_hat, CUFFT_INVERSE);
   }
-
-  __host__ cufftComplex *fft(cufftComplex *data, Rect<3> rect, const size_t *strides)
-  {
-    cufftHandle plan;
-    int n[3] = {int(rect.hi.x - rect.lo.x + 1), int(rect.hi.y - rect.lo.y + 1), int(rect.hi.z - rect.lo.z + 1)};
-
-    cufftComplex *result;
-    cudaMalloc((void**)&result, sizeof(cufftComplex) * rect.volume());
-    if (cudaGetLastError() != cudaSuccess) {
-      assert(false && "CUDA error: Failed to allocate");
-    }
-
-    if (cufftPlanMany(&plan, 3, n,
-                      NULL, 1, rect.volume(),
-                      NULL, 1, rect.volume(),
-                      CUFFT_C2C, 1) != CUFFT_SUCCESS) {
-      assert(false &&"cuFFT error: Plan creation failed");
-    }
-
-    if (cufftExecC2C(plan, data, data, CUFFT_FORWARD) != CUFFT_SUCCESS) {
-      assert(false && "cuFFT error: ExecC2C Forward failed");
-    }
-
-    if (cudaDeviceSynchronize() != cudaSuccess){
-      assert(false && "CUDA error: Failed to synchronize");
-    }
-
-    cufftDestroy(plan);
-  }
-
 
 private:
   long er_iter;
   long hio_iter;
   double hio_beta;
 
+  const float *accumulator;
+  const float *weight;
+  float *amplitudes;
+
   cufftComplex *rho;
-  Rect<3> rho_rect;
-  const size_t *rho_strides;
+  bool *support;
+  cufftComplex *rho_hat;
+
+  Rect<3> rect;
+  const size_t *strides;
+  FFT rho_fft;
 };
 
 __host__
@@ -147,16 +251,33 @@ int64_t gpu_phaser_task(const Task *task,
 {
   assert(regions.size() == 1);
 
-  const FieldAccessor<READ_WRITE, cufftComplex, 3, coord_t, Realm::AffineAccessor<cufftComplex, 3, coord_t> > rho(regions[0], FID_RHO);
-  Rect<3> rho_rect = runtime->get_index_space_domain(ctx, regions[0].get_logical_region().get_index_space());
+  const FieldAccessor<READ_ONLY, float, 3, coord_t, Realm::AffineAccessor<float, 3, coord_t> > accumulator(regions[0], FID_ACCUMULATOR);
+  const FieldAccessor<READ_ONLY, float, 3, coord_t, Realm::AffineAccessor<float, 3, coord_t> > weight(regions[0], FID_WEIGHT);
+  Rect<3> diffraction_rect = runtime->get_index_space_domain(ctx, regions[0].get_logical_region().get_index_space());
+  size_t diffraction_strides[3];
+  const float *accumulator_origin = accumulator.ptr(diffraction_rect, diffraction_strides);
+  const float *weight_origin = weight.ptr(diffraction_rect, diffraction_strides);
+
+  const FieldAccessor<READ_WRITE, cufftComplex, 3, coord_t, Realm::AffineAccessor<cufftComplex, 3, coord_t> > rho(regions[1], FID_RHO);
+  const FieldAccessor<READ_WRITE, bool, 3, coord_t, Realm::AffineAccessor<bool, 3, coord_t> > support(regions[1], FID_SUPPORT);
+  Rect<3> rho_rect = runtime->get_index_space_domain(ctx, regions[1].get_logical_region().get_index_space());
   size_t rho_strides[3];
   cufftComplex *rho_origin = rho.ptr(rho_rect, rho_strides);
+  bool *support_origin = support.ptr(rho_rect, rho_strides);
+
+  assert(diffraction_rect == rho_rect);
+  assert(diffraction_strides[0] == rho_strides[0]);
+  assert(diffraction_strides[1] == rho_strides[1]);
+  assert(diffraction_strides[2] == rho_strides[2]);
 
   long hio_iter = 100;
   double hio_beta = 0.1;
   long er_iter = hio_iter / 2;
 
-  Phaser phaser(er_iter, hio_iter, hio_beta, rho_origin, rho_rect, rho_strides);
+  Phaser phaser(er_iter, hio_iter, hio_beta,
+                accumulator_origin, weight_origin,
+                rho_origin, support_origin, rho_rect, rho_strides);
+  phaser.run();
 
 #if 0
   const dim3 block(8, 8, 4);
