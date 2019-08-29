@@ -17,6 +17,7 @@ endif()
 
 if(Legion_USE_CUDA)
   cuda_add_library(native_kernels SHARED ${NATIVE_KERNELS_SRC})
+  cuda_add_cufft_to_target(native_kernels)
 else()
   add_library(native_kernels SHARED ${NATIVE_KERNELS_SRC})
 endif()
