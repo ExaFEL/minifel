@@ -38,8 +38,14 @@ import pysingfel as ps
 
 N_POINTS = 201
 
+gpu_phaser = legion.extern_task(
+    task_id=101,
+    argument_types=[Region, Region, legion.int32, legion.float32, legion.int32],
+    privileges=[R('accumulator'), RW],
+    return_type=legion.void,
+    calling_convention='regent')
 
-@task(privileges=[R, R, R, R, Reduce('+')], leaf=True)
+@task(privileges=[R, R, R, R, Reduce('+', 'accumulator', 'weight')], leaf=True)
 def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
     print(f"Aligning {active.active[0]} events")
     for l in range(active.active[0]):
@@ -49,14 +55,19 @@ def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
             inverse=False)
 
 
-@task(privileges=[R, RW], leaf=True)
-def solve_step(diffraction, reconstruction, rank, iteration,
-               hio_iter, hio_beta, er_iter, sw_thresh):
+@task(privileges=[RW('amplitude') + R('accumulator', 'weight')], leaf=True)
+def preprocess(diffraction):
     numpy.seterr(invalid='ignore', divide='ignore')
     amplitude = numpy.nan_to_num(fft.ifftshift(
         (diffraction.accumulator + diffraction.accumulator[::-1,::-1,::-1])
         / (diffraction.weight + diffraction.weight[::-1,::-1,::-1])))
-    initial_state = InitialState(amplitude, reconstruction.support,
+    numpy.copyto(diffraction.amplitude, amplitude, casting='no')
+
+@task(privileges=[R('amplitude'), RW], leaf=True)
+def solve_step(diffraction, reconstruction, rank, iteration,
+               hio_iter, hio_beta, er_iter, sw_thresh):
+    numpy.seterr(invalid='ignore', divide='ignore')
+    initial_state = InitialState(diffraction.amplitude, reconstruction.support,
                                  reconstruction.rho, True)
 
     if iteration == 0:
@@ -68,6 +79,12 @@ def solve_step(diffraction, reconstruction, rank, iteration,
     phaser.ER_loop(er_iter)
     phaser.HIO_loop(hio_iter, hio_beta)
     phaser.ER_loop(er_iter)
+
+    # Run GPU phaser and compare results.
+    gpu_phaser(diffraction, reconstruction, hio_iter, hio_beta, er_iter)
+    assert numpy.array_equal(reconstruction.support, phaser.get_support(True))
+    assert numpy.array_equal(reconstruction.rho, phaser.get_rho(True))
+
     phaser.shrink_wrap(sw_thresh)
 
     err_Fourier = phaser.get_reciprocal_errs()[-1]
@@ -147,9 +164,11 @@ def solve(n_runs):
     volume_shape = (N_POINTS,) * 3
     diffraction = Region(volume_shape, {
         'accumulator': legion.float32,
-        'weight': legion.float32})
+        'weight': legion.float32,
+        'amplitude': legion.float32})
     legion.fill(diffraction, 'accumulator', 0.)
     legion.fill(diffraction, 'weight', 0.)
+    legion.fill(diffraction, 'amplitude', 0.)
 
     n_reconstructions = 4
     reconstructions = []
@@ -183,6 +202,8 @@ def solve(n_runs):
                 [n_procs], preprocess,
                 images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
                 voxel_length)
+
+            get_amplitudes(diffraction)
 
         # Run solver.
         assert n_reconstructions == 4

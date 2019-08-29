@@ -35,3 +35,5 @@ if legion.is_script:
     print('WARNING: unable to set mapper in script mode')
 else:
     c.register_simple_mapper()
+
+c.register_phaser_tasks(101)

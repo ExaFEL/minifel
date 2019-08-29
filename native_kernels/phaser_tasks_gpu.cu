@@ -20,8 +20,7 @@
 using namespace Legion;
 
 enum FieldIDs {
-  FID_ACCUMULATOR = 1,
-  FID_WEIGHT = 2,
+  FID_AMPLITUDE = 1,
   FID_RHO = 3,
   FID_SUPPORT = 3,
 };
@@ -147,24 +146,18 @@ private:
 class Phaser {
 public:
   Phaser(long er_iter, long hio_iter, double hio_beta,
-         const float *accmulator, const float *weight,
+         const float *amplitudes,
          cufftComplex *rho, bool *support, Rect<3> rect, const size_t *strides)
     : er_iter(er_iter)
     , hio_iter(hio_iter)
     , hio_beta(hio_beta)
-    , accumulator(accumulator)
-    , weight(weight)
+    , amplitudes(amplitudes)
     , rho(rho)
     , support(support)
     , rect(rect)
     , strides(strides)
     , rho_fft(rect, strides)
   {
-    cudaMalloc((void**)&amplitudes, sizeof(float) * rect.volume());
-    if (cudaGetLastError() != cudaSuccess) {
-      assert(false && "CUDA error: Failed to allocate");
-    }
-
     cudaMalloc((void**)&rho_hat, sizeof(cufftComplex) * rect.volume());
     if (cudaGetLastError() != cudaSuccess) {
       assert(false && "CUDA error: Failed to allocate");
@@ -173,7 +166,6 @@ public:
 
   ~Phaser()
   {
-    cudaFree(amplitudes);
     cudaFree(rho_hat);
   }
 
@@ -224,9 +216,7 @@ private:
   long hio_iter;
   double hio_beta;
 
-  const float *accumulator;
-  const float *weight;
-  float *amplitudes;
+  const float *amplitudes;
 
   cufftComplex *rho;
   bool *support;
@@ -237,26 +227,29 @@ private:
   FFT rho_fft;
 };
 
-__host__
-void ER_loop(long er_iter)
-{
-  for (long k = 0; k < er_iter; ++k) {
-  }
-}
+struct gpu_phaser_task_args {
+  int64_t map[1];
+  LogicalRegion diffraction;
+  LogicalRegion reconstruction;
+  int32_t hio_iter;
+  float hio_beta;
+  int32_t er_iter;
+};
 
 __host__
 int64_t gpu_phaser_task(const Task *task,
                         const std::vector<PhysicalRegion> &regions,
                         Context ctx, Runtime *runtime)
 {
+  assert(task->arglen == sizeof(gpu_phaser_task_args));
+  gpu_phaser_task_args args = *(gpu_phaser_task_args *)(task->args);
+
   assert(regions.size() == 1);
 
-  const FieldAccessor<READ_ONLY, float, 3, coord_t, Realm::AffineAccessor<float, 3, coord_t> > accumulator(regions[0], FID_ACCUMULATOR);
-  const FieldAccessor<READ_ONLY, float, 3, coord_t, Realm::AffineAccessor<float, 3, coord_t> > weight(regions[0], FID_WEIGHT);
+  const FieldAccessor<READ_ONLY, float, 3, coord_t, Realm::AffineAccessor<float, 3, coord_t> > amplitude(regions[0], FID_AMPLITUDE);
   Rect<3> diffraction_rect = runtime->get_index_space_domain(ctx, regions[0].get_logical_region().get_index_space());
   size_t diffraction_strides[3];
-  const float *accumulator_origin = accumulator.ptr(diffraction_rect, diffraction_strides);
-  const float *weight_origin = weight.ptr(diffraction_rect, diffraction_strides);
+  const float *amplitude_origin = amplitude.ptr(diffraction_rect, diffraction_strides);
 
   const FieldAccessor<READ_WRITE, cufftComplex, 3, coord_t, Realm::AffineAccessor<cufftComplex, 3, coord_t> > rho(regions[1], FID_RHO);
   const FieldAccessor<READ_WRITE, bool, 3, coord_t, Realm::AffineAccessor<bool, 3, coord_t> > support(regions[1], FID_SUPPORT);
@@ -270,12 +263,12 @@ int64_t gpu_phaser_task(const Task *task,
   assert(diffraction_strides[1] == rho_strides[1]);
   assert(diffraction_strides[2] == rho_strides[2]);
 
-  long hio_iter = 100;
-  double hio_beta = 0.1;
-  long er_iter = hio_iter / 2;
+  long hio_iter = args.hio_iter;
+  double hio_beta = args.hio_beta;
+  long er_iter = args.er_iter;
 
   Phaser phaser(er_iter, hio_iter, hio_beta,
-                accumulator_origin, weight_origin,
+                amplitude_origin,
                 rho_origin, support_origin, rho_rect, rho_strides);
   phaser.run();
 
