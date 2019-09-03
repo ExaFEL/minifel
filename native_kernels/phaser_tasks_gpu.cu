@@ -19,12 +19,6 @@
 
 using namespace Legion;
 
-enum FieldIDs {
-  FID_AMPLITUDE = 1,
-  FID_RHO = 3,
-  FID_SUPPORT = 3,
-};
-
 #if 0
 __global__
 void gpu_phaser_kernel(Rect<3> rect,
@@ -234,6 +228,8 @@ struct gpu_phaser_task_args {
   int32_t hio_iter;
   float hio_beta;
   int32_t er_iter;
+  FieldID diffraction_fields[3];
+  FieldID reconstruction_fields[2];
 };
 
 __host__
@@ -244,24 +240,28 @@ int64_t gpu_phaser_task(const Task *task,
   assert(task->arglen == sizeof(gpu_phaser_task_args));
   gpu_phaser_task_args args = *(gpu_phaser_task_args *)(task->args);
 
-  assert(regions.size() == 1);
+  assert(regions.size() == 2);
 
-  const FieldAccessor<READ_ONLY, float, 3, coord_t, Realm::AffineAccessor<float, 3, coord_t> > amplitude(regions[0], FID_AMPLITUDE);
+  const FieldAccessor<READ_ONLY, float, 3, coord_t, Realm::AffineAccessor<float, 3, coord_t> > amplitude(regions[0], args.diffraction_fields[2]);
   Rect<3> diffraction_rect = runtime->get_index_space_domain(ctx, regions[0].get_logical_region().get_index_space());
   size_t diffraction_strides[3];
   const float *amplitude_origin = amplitude.ptr(diffraction_rect, diffraction_strides);
 
-  const FieldAccessor<READ_WRITE, cufftComplex, 3, coord_t, Realm::AffineAccessor<cufftComplex, 3, coord_t> > rho(regions[1], FID_RHO);
-  const FieldAccessor<READ_WRITE, bool, 3, coord_t, Realm::AffineAccessor<bool, 3, coord_t> > support(regions[1], FID_SUPPORT);
+  const FieldAccessor<READ_WRITE, bool, 3, coord_t, Realm::AffineAccessor<bool, 3, coord_t> > support(regions[1], args.reconstruction_fields[0]);
+  const FieldAccessor<READ_WRITE, cufftComplex, 3, coord_t, Realm::AffineAccessor<cufftComplex, 3, coord_t> > rho(regions[1], args.reconstruction_fields[1]);
   Rect<3> rho_rect = runtime->get_index_space_domain(ctx, regions[1].get_logical_region().get_index_space());
   size_t rho_strides[3];
+  size_t support_strides[3];
   cufftComplex *rho_origin = rho.ptr(rho_rect, rho_strides);
-  bool *support_origin = support.ptr(rho_rect, rho_strides);
+  bool *support_origin = support.ptr(rho_rect, support_strides);
 
   assert(diffraction_rect == rho_rect);
   assert(diffraction_strides[0] == rho_strides[0]);
   assert(diffraction_strides[1] == rho_strides[1]);
   assert(diffraction_strides[2] == rho_strides[2]);
+  assert(diffraction_strides[0] == support_strides[0]);
+  assert(diffraction_strides[1] == support_strides[1]);
+  assert(diffraction_strides[2] == support_strides[2]);
 
   long hio_iter = args.hio_iter;
   double hio_beta = args.hio_beta;

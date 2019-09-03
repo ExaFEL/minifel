@@ -5,7 +5,8 @@ find_package(Legion REQUIRED)
 
 list(APPEND NATIVE_KERNELS_SRC
   lifeline_mapper.cc       lifeline_mapper.h
-  phaser_tasks.cc phaser_tasks.h
+  simple_mapper.cc         simple_mapper.h
+  phaser_tasks.cc          phaser_tasks.h
 )
 
 if(Legion_USE_CUDA)

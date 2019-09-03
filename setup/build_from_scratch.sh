@@ -103,6 +103,9 @@ if [[ -d \$CONDA_ROOT ]]; then
   source "\$CONDA_ROOT/etc/profile.d/conda.sh"
   conda activate "\$CONDA_ENV_DIR"
 fi
+
+export USE_CUPY=\$(( 1 - USE_CUDA ))
+export NUMBA_DISABLE_CUDA=\$USE_CUDA
 EOF
 
 # Clean up any previous installs.

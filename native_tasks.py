@@ -23,11 +23,14 @@ import os
 import subprocess
 
 root_dir = os.path.dirname(os.path.realpath(__file__))
+phaser_tasks_h_path = os.path.join(root_dir, 'native_kernels', 'phaser_tasks.h')
 simple_mapper_h_path = os.path.join(root_dir, 'native_kernels', 'simple_mapper.h')
 native_kernels_so_path = os.path.join(root_dir, 'native_kernels', 'build', 'libnative_kernels.so')
+phaser_tasks_header = subprocess.check_output(['gcc', '-E', '-P', phaser_tasks_h_path]).decode('utf-8')
 simple_mapper_header = subprocess.check_output(['gcc', '-E', '-P', simple_mapper_h_path]).decode('utf-8')
 
 ffi = cffi.FFI()
+ffi.cdef(phaser_tasks_header)
 ffi.cdef(simple_mapper_header)
 c = ffi.dlopen(native_kernels_so_path)
 

@@ -17,6 +17,7 @@
 
 from __future__ import print_function
 
+from collections import OrderedDict
 import h5py as h5
 import legion
 from legion import index_launch, task, ID, MustEpochLaunch, Partition, R, Reduce, Region, RW, Tunable
@@ -41,7 +42,7 @@ N_POINTS = 201
 gpu_phaser = legion.extern_task(
     task_id=101,
     argument_types=[Region, Region, legion.int32, legion.float32, legion.int32],
-    privileges=[R('accumulator'), RW],
+    privileges=[R('amplitude'), RW],
     return_type=legion.void,
     calling_convention='regent')
 
@@ -56,14 +57,14 @@ def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
 
 
 @task(privileges=[RW('amplitude') + R('accumulator', 'weight')], leaf=True)
-def preprocess(diffraction):
+def merge(diffraction):
     numpy.seterr(invalid='ignore', divide='ignore')
     amplitude = numpy.nan_to_num(fft.ifftshift(
         (diffraction.accumulator + diffraction.accumulator[::-1,::-1,::-1])
         / (diffraction.weight + diffraction.weight[::-1,::-1,::-1])))
     numpy.copyto(diffraction.amplitude, amplitude, casting='no')
 
-@task(privileges=[R('amplitude'), RW], leaf=True)
+@task(privileges=[R('amplitude'), RW]) #, leaf=True)
 def solve_step(diffraction, reconstruction, rank, iteration,
                hio_iter, hio_beta, er_iter, sw_thresh):
     numpy.seterr(invalid='ignore', divide='ignore')
@@ -147,10 +148,10 @@ def solve(n_runs):
     n_events_per_node = 100
     event_raw_shape = (4, 512, 512)
     images = Region(
-        (n_events_per_node * n_procs,) + event_raw_shape, {'image': legion.float64})
+        (n_events_per_node * n_procs,) + event_raw_shape, OrderedDict([('image', legion.float64)]))
     orientations = Region(
-        (n_events_per_node * n_procs, 4), {'orientation': legion.float32})
-    active = Region((n_procs,), {'active': legion.uint32})
+        (n_events_per_node * n_procs, 4), OrderedDict([('orientation', legion.float32)]))
+    active = Region((n_procs,), OrderedDict([('active', legion.uint32)]))
     legion.fill(images, 'image', 0)
     legion.fill(orientations, 'orientation', 0)
     legion.fill(active, 'active', 0)
@@ -162,10 +163,10 @@ def solve(n_runs):
         active, [n_procs], numpy.eye(1, 1), (1,))
 
     volume_shape = (N_POINTS,) * 3
-    diffraction = Region(volume_shape, {
-        'accumulator': legion.float32,
-        'weight': legion.float32,
-        'amplitude': legion.float32})
+    diffraction = Region(volume_shape, OrderedDict([
+        ('accumulator', legion.float32),
+        ('weight', legion.float32),
+        ('amplitude', legion.float32)]))
     legion.fill(diffraction, 'accumulator', 0.)
     legion.fill(diffraction, 'weight', 0.)
     legion.fill(diffraction, 'amplitude', 0.)
@@ -173,15 +174,15 @@ def solve(n_runs):
     n_reconstructions = 4
     reconstructions = []
     for i in range(n_reconstructions):
-        reconstruction = Region(volume_shape, {
-            'support': legion.bool_,
-            'rho': legion.complex64})
+        reconstruction = Region(volume_shape, OrderedDict([
+            ('support', legion.bool_),
+            ('rho', legion.complex64)]))
         legion.fill(reconstruction, 'support', False)
         legion.fill(reconstruction, 'rho', 0.)
         reconstructions.append(reconstruction)
 
     # Load pixel momentum
-    pixels = Region(event_raw_shape + (3,), {'momentum': legion.float64})
+    pixels = Region(event_raw_shape + (3,), OrderedDict([('momentum', legion.float64)]))
     legion.fill(pixels, 'momentum', 0.)
     max_pixel_dist = load_pixels(pixels).get()
     voxel_length = 2 * max_pixel_dist / (N_POINTS - 1)
@@ -203,7 +204,7 @@ def solve(n_runs):
                 images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
                 voxel_length)
 
-            get_amplitudes(diffraction)
+            merge(diffraction)
 
         # Run solver.
         assert n_reconstructions == 4
