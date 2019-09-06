@@ -36,6 +36,8 @@ import pysingfel as ps
 ### Solver
 ###
 
+use_cpu = False
+use_gpu = True
 
 N_POINTS = 201
 
@@ -76,33 +78,30 @@ def solve_step(diffraction, reconstruction, rank, iteration,
         initial_state.generate_support_from_autocorrelation(rel_threshold=0.25)
         initial_state.generate_random_rho()
 
-    # Elliott: this is the task to convert to the GPU
     phaser = Phaser(initial_state, monitor='last')
-    print('starting to run CPU solver', flush=True)
-    phaser.ER_loop(er_iter)
-    phaser.HIO_loop(hio_iter, hio_beta)
-    phaser.ER_loop(er_iter)
-
-    # Run GPU phaser and compare results.
-    print('starting to run GPU solver', flush=True)
-    gpu_phaser(diffraction, reconstruction, hio_iter, hio_beta, er_iter)
-    print('checking GPU solver result support', flush=True)
-    assert numpy.array_equal(reconstruction.support, phaser.get_support(True))
-    print('checking GPU solver result rho', flush=True)
-    a = reconstruction.rho
-    b = phaser.get_rho(True)
-    match = numpy.all(numpy.logical_or(numpy.logical_and(numpy.isnan(a), numpy.isnan(b)), a == b))
-    # match = numpy.allclose(reconstruction.rho, phaser.get_rho(True))
-    if not match:
-        import tempfile
-        tmp_dir = os.path.join(os.environ['MEMBERWORK'], 'chm137', 'minifel_output')
-        with tempfile.NamedTemporaryFile(dir=tmp_dir, prefix='rho_gpu_', delete=False) as f:
-            numpy.save(f, reconstruction.rho)
-        with tempfile.NamedTemporaryFile(dir=tmp_dir, prefix='rho_cpu_', delete=False) as f:
-            numpy.save(f, phaser.get_rho(True))
-    assert match
-    print('validated GPU solver results', flush=True)
-
+    if use_cpu:
+        phaser.ER_loop(er_iter)
+        phaser.HIO_loop(hio_iter, hio_beta)
+        phaser.ER_loop(er_iter)
+    if use_gpu:
+        gpu_phaser(diffraction, reconstruction, hio_iter, hio_beta, er_iter)
+    if use_cpu and use_gpu:
+        assert numpy.array_equal(reconstruction.support, phaser.get_support(True))
+        gpu_rho = reconstruction.rho
+        cpu_rho = phaser.get_rho(True)
+        match = numpy.all(numpy.logical_or(numpy.logical_and(numpy.isnan(cpu_rho), numpy.isnan(gpu_rho)), cpu_rho == gpu_rho))
+        if not match:
+            import tempfile
+            tmp_dir = os.path.join(os.environ['MEMBERWORK'], 'chm137', 'minifel_output')
+            with tempfile.NamedTemporaryFile(dir=tmp_dir, prefix='rho_cpu_', delete=False) as f:
+                numpy.save(f, cpu_rho)
+            with tempfile.NamedTemporaryFile(dir=tmp_dir, prefix='rho_gpu_', delete=False) as f:
+                numpy.save(f, gpu_rho)
+        assert match
+        print('validated GPU solver results')
+    if use_gpu and not use_cpu:
+        numpy.copyto(self._support_, reconstruction.support, casting='no')
+        numpy.copyto(self._rho_, reconstruction.rho, casting='no')
     phaser.shrink_wrap(sw_thresh)
 
     err_Fourier = phaser.get_reciprocal_errs()[-1]
