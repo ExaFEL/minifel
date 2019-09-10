@@ -31,7 +31,6 @@ import threading
 
 data_store = []
 n_events_ready = 0
-n_events_used = 0
 n_runs_complete = 0
 data_lock = threading.Lock()
 
@@ -69,30 +68,37 @@ def load_run_data(run):
 
 
 def reset_data():
-    global data_store, n_events_ready, n_events_used
+    global data_store, n_events_ready
     with data_lock:
         data_store = []
         n_events_ready = 0
-        n_events_used = 0
 
 
 @task(privileges=[RW, RW, RW], leaf=True)
-def fill_data_region(images, orientations, active):
-    global data_store, n_events_used
+def fill_data_region(images, orientations, active, limit=None):
+    global data_store, n_events_ready
     with data_lock:
-        raw, used, ready = data_store, n_events_used, n_events_ready
-        data_store = []
-        n_events_used = ready
+        taken = min(n_events_ready, limit) if limit is not None else n_events_ready
+        assert taken <= len(data_store)
+        raw = data_store
+        data_store = raw[taken:]
+        n_events_ready -= taken
 
-    for idx in range(ready - used):
+    for idx in range(taken):
         numpy.copyto(images.image[idx,:,:,:], raw[idx][0], casting='no')
         numpy.copyto(orientations.orientation[idx,:], raw[idx][1], casting='no')
-    active.active[0] = ready - used
+    active.active[0] = taken
 
-    if ready != used:
-        print(f"Filled {ready-used} new events.")
+    if taken > 0:
+        print(f"Filled {taken} new events.")
 
 
 def get_num_runs_complete():
     with data_lock:
         return n_runs_complete
+
+
+@task(return_type=legion.int64)
+def get_num_events_ready():
+    with data_lock:
+        return n_events_ready

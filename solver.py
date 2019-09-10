@@ -204,6 +204,8 @@ def solve(n_runs):
     max_pixel_dist = load_pixels(pixels).get()
     voxel_length = 2 * max_pixel_dist / (N_POINTS - 1)
 
+    images_per_solve = 2
+
     complete = False
     iteration = 0
     fences = []
@@ -213,7 +215,7 @@ def solve(n_runs):
             with MustEpochLaunch([n_procs]):
                 index_launch(
                     [n_procs], data_collector.fill_data_region,
-                    images_part[ID], orient_part[ID], active_part[ID])
+                    images_part[ID], orient_part[ID], active_part[ID], images_per_solve)
 
             # Preprocess data.
             index_launch(
@@ -242,8 +244,11 @@ def solve(n_runs):
             if iteration - 2 >= 0:
                 fences[iteration - 2].get()
 
-            # Check that all runs have been read.
-            complete = data_collector.get_num_runs_complete() == n_runs
+            # Check that all runs have been read and that all events have been consumed.
+            if data_collector.get_num_runs_complete() == n_runs:
+                n_events_ready = index_launch([n_procs], data_collector.get_num_events_ready, reduce='+').get()
+                print(f'All runs complete, {n_events_ready} events remaining')
+                complete = n_events_ready == 0
 
         iteration += 1
 
