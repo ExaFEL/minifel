@@ -33,5 +33,5 @@ if [[ $(hostname) = "sapling"* ]]; then
     export CUDA_HOME=$CUDA
 fi
 
-# legion_python main -ll:py 1 -ll:cpu 1 -level announce=2
+# legion_python main -ll:py 1 -ll:cpu 1  -ll:csize 8192 -level announce=2
 mpirun -n 5 legion_python main -ll:py 1 -ll:cpu 1 -ll:csize 8192 -level announce=2
