@@ -24,7 +24,7 @@ if [[ ! -d $DATA_DIR ]]; then
 fi
 
 export OUT_DIR="${OUT_DIR:-$root_dir/../output}"
-if [[ ! -d $DATA_DIR ]]; then
+if [[ ! -d $OUT_DIR ]]; then
     echo "OUT_DIR is not set or does not exist. Please check it and rerun."
     false
 fi
