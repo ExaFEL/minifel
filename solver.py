@@ -100,14 +100,15 @@ def solve_step(diffraction, reconstruction, rank, iteration,
         assert match
         print('validated GPU solver results')
     if use_gpu and not use_cpu:
-        numpy.copyto(self._support_, reconstruction.support, casting='no')
-        numpy.copyto(self._rho_, reconstruction.rho, casting='no')
+        numpy.copyto(phaser._support_, reconstruction.support, casting='no')
+        numpy.copyto(phaser._rho_, reconstruction.rho, casting='no')
     phaser.shrink_wrap(sw_thresh)
 
-    err_Fourier = phaser.get_reciprocal_errs()[-1]
-    err_real = phaser.get_real_errs()[-1]
-    print(f"Rank #{rank}, iter #{iteration} -- "
-          f"errors: {err_Fourier:.5f}, {err_real:.5f}")
+    if use_cpu:
+        err_Fourier = phaser.get_reciprocal_errs()[-1]
+        err_real = phaser.get_real_errs()[-1]
+        print(f"Rank #{rank}, iter #{iteration} -- "
+              f"errors: {err_Fourier:.5f}, {err_real:.5f}")
 
     numpy.copyto(reconstruction.support, phaser.get_support(True),
                  casting='no')
