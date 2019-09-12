@@ -369,7 +369,7 @@ def solve(n_runs):
 
             # Check that all runs have been read and that all events have been consumed.
             if data_collector.get_num_runs_complete() == n_runs:
-                n_events_ready.append(index_launch([n_procs], data_collector.get_num_events_ready, reduce='+'))
+                n_events_ready.append(index_launch([n_procs], data_collector.get_num_events_ready, active_part[ID], reduce='+'))
                 if iteration - iterations_ahead >= 0:
                     ready = n_events_ready[iteration - iterations_ahead].get()
                     print(f'All runs complete, {ready} events remaining', flush=True)

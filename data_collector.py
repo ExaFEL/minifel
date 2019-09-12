@@ -98,7 +98,7 @@ def get_num_runs_complete():
         return n_runs_complete
 
 
-@task(return_type=legion.int64)
-def get_num_events_ready():
+@task(privileges=[R], return_type=legion.int64, leaf=True)
+def get_num_events_ready(active):
     with data_lock:
         return n_events_ready
