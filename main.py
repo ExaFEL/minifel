@@ -43,6 +43,8 @@ def main():
     # Note: DataSource doesn't seem to care about max_events when given
     # a filename.
 
+    start_time = legion.c.legion_get_current_time_in_nanos()
+
     n_runs = 0
     runs = []
     for run in ds.runs():
@@ -58,3 +60,6 @@ def main():
     solver.solve(n_runs)
 
     legion.execution_fence(block=True) # Block to keep runs in scope until solve completes.
+
+    stop_time = legion.c.legion_get_current_time_in_nanos()
+    print('Total running time: %e seconds' % ((stop_time - start_time)/1e9))
