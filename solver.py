@@ -19,6 +19,7 @@ from __future__ import print_function
 
 from collections import OrderedDict
 import h5py as h5
+import itertools
 import legion
 from legion import index_launch, task, ID, MustEpochLaunch, Partition, R, Reduce, Region, RW, Tunable
 import numpy
@@ -41,12 +42,42 @@ use_gpu = True
 
 N_POINTS = 201
 
-gpu_phaser = legion.extern_task(
+gpu_phaser_0 = legion.extern_task(
     task_id=101,
-    argument_types=[Region, Region, legion.int32, legion.float32, legion.int32],
-    privileges=[R('amplitude'), RW],
+    argument_types=[Region, Region, legion.int32, legion.float32, legion.int32, legion.int32],
+    privileges=[R('amplitude_0'), RW],
     return_type=legion.void,
     calling_convention='regent')
+
+gpu_phaser_1 = legion.extern_task(
+    task_id=101,
+    argument_types=[Region, Region, legion.int32, legion.float32, legion.int32, legion.int32],
+    privileges=[R('amplitude_1'), RW],
+    return_type=legion.void,
+    calling_convention='regent')
+
+gpu_phaser_2 = legion.extern_task(
+    task_id=101,
+    argument_types=[Region, Region, legion.int32, legion.float32, legion.int32, legion.int32],
+    privileges=[R('amplitude_2'), RW],
+    return_type=legion.void,
+    calling_convention='regent')
+
+gpu_phaser_3 = legion.extern_task(
+    task_id=101,
+    argument_types=[Region, Region, legion.int32, legion.float32, legion.int32, legion.int32],
+    privileges=[R('amplitude_3'), RW],
+    return_type=legion.void,
+    calling_convention='regent')
+
+gpu_phaser_4 = legion.extern_task(
+    task_id=101,
+    argument_types=[Region, Region, legion.int32, legion.float32, legion.int32, legion.int32],
+    privileges=[R('amplitude_4'), RW],
+    return_type=legion.void,
+    calling_convention='regent')
+
+gpu_phaser_tasks = [gpu_phaser_0, gpu_phaser_1, gpu_phaser_2, gpu_phaser_3, gpu_phaser_4]
 
 @task(privileges=[R, R, R, R, Reduce('+', 'accumulator', 'weight')], leaf=True)
 def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
@@ -57,21 +88,69 @@ def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
             diffraction.accumulator, diffraction.weight, voxel_length,
             inverse=False)
 
+@task(privileges=[R, R, R, R, Reduce('+', 'accumulator', 'weight')], leaf=True)
+def preprocess_0(*args):
+    return preprocess.body(*args)
 
-@task(privileges=[RW('amplitude') + R('accumulator', 'weight')], leaf=True)
-def merge(diffraction):
+@task(privileges=[R, R, R, R, Reduce('+', 'accumulator', 'weight')], leaf=True)
+def preprocess_1(*args):
+    return preprocess.body(*args)
+
+@task(privileges=[R, R, R, R, Reduce('+', 'accumulator', 'weight')], leaf=True)
+def preprocess_2(*args):
+    return preprocess.body(*args)
+
+@task(privileges=[R, R, R, R, Reduce('+', 'accumulator', 'weight')], leaf=True)
+def preprocess_3(*args):
+    return preprocess.body(*args)
+
+@task(privileges=[R, R, R, R, Reduce('+', 'accumulator', 'weight')], leaf=True)
+def preprocess_4(*args):
+    return preprocess.body(*args)
+
+preprocess_tasks = [preprocess_0, preprocess_1, preprocess_2, preprocess_3, preprocess_4]
+
+def merge(diffraction, field):
     numpy.seterr(invalid='ignore', divide='ignore')
     amplitude = numpy.nan_to_num(fft.ifftshift(
         (diffraction.accumulator + diffraction.accumulator[::-1,::-1,::-1])
         / (diffraction.weight + diffraction.weight[::-1,::-1,::-1])))
-    numpy.copyto(diffraction.amplitude, amplitude, casting='no')
+    numpy.copyto(getattr(diffraction, 'amplitude_%s' % field), amplitude, casting='no')
 
-@task(privileges=[R('amplitude'), RW]) #, leaf=True)
-def solve_step(diffraction, reconstruction, rank, iteration,
+@task(privileges=[RW('amplitude_0') + R('accumulator', 'weight')], leaf=True)
+def merge_0(diffraction):
+    return merge(diffraction, 0)
+
+@task(privileges=[RW('amplitude_1') + R('accumulator', 'weight')], leaf=True)
+def merge_1(diffraction):
+    return merge(diffraction, 1)
+
+@task(privileges=[RW('amplitude_2') + R('accumulator', 'weight')], leaf=True)
+def merge_2(diffraction):
+    return merge(diffraction, 2)
+
+@task(privileges=[RW('amplitude_3') + R('accumulator', 'weight')], leaf=True)
+def merge_3(diffraction):
+    return merge(diffraction, 3)
+
+@task(privileges=[RW('amplitude_4') + R('accumulator', 'weight')], leaf=True)
+def merge_4(diffraction):
+    return merge(diffraction, 4)
+
+merge_tasks = [merge_0, merge_1, merge_2, merge_3, merge_4]
+
+def solve_step(field, diffraction, reconstruction, rank, iteration,
+               # hio_iter, hio_betas, er_iter, sw_threshes):
                hio_iter, hio_beta, er_iter, sw_thresh):
+    # hio_beta = hio_betas[int(rank) % hio_betas.size]
+    # sw_thresh = sw_threshes[int(rank) // hio_betas.size]
+
     numpy.seterr(invalid='ignore', divide='ignore')
-    initial_state = InitialState(diffraction.amplitude, reconstruction.support,
-                                 reconstruction.rho, True)
+    initial_state = InitialState(
+        getattr(diffraction, 'amplitude_%s' % field),
+        reconstruction.support, #.reshape(reconstruction.support.shape[1:]),
+        reconstruction.rho, #.reshape(reconstruction.rho.shape[1:]),
+        True)
 
     if iteration == 0:
         print(f"Initializing rank #{rank}")
@@ -84,7 +163,7 @@ def solve_step(diffraction, reconstruction, rank, iteration,
         phaser.HIO_loop(hio_iter, hio_beta)
         phaser.ER_loop(er_iter)
     if use_gpu:
-        gpu_phaser(diffraction, reconstruction, hio_iter, hio_beta, er_iter)
+        gpu_phaser_tasks[field](diffraction, reconstruction, hio_iter, hio_beta, er_iter, field)
     if use_cpu and use_gpu:
         assert numpy.array_equal(reconstruction.support, phaser.get_support(True))
         gpu_rho = reconstruction.rho
@@ -114,6 +193,28 @@ def solve_step(diffraction, reconstruction, rank, iteration,
                  casting='no')
     numpy.copyto(reconstruction.rho, phaser.get_rho(True), casting='no')
 
+
+@task(privileges=[R('amplitude_0'), RW])
+def solve_step_0(*args):
+    return solve_step(0, *args)
+
+@task(privileges=[R('amplitude_1'), RW])
+def solve_step_1(*args):
+    return solve_step(1, *args)
+
+@task(privileges=[R('amplitude_2'), RW])
+def solve_step_2(*args):
+    return solve_step(2, *args)
+
+@task(privileges=[R('amplitude_3'), RW])
+def solve_step_3(*args):
+    return solve_step(3, *args)
+
+@task(privileges=[R('amplitude_4'), RW])
+def solve_step_4(*args):
+    return solve_step(4, *args)
+
+solve_step_tasks = [solve_step_0, solve_step_1, solve_step_2, solve_step_3, solve_step_4]
 
 @task(privileges=[R], leaf=True)
 def save_diffraction(diffraction, idx):
@@ -183,12 +284,32 @@ def solve(n_runs):
     diffraction = Region(volume_shape, OrderedDict([
         ('accumulator', legion.float32),
         ('weight', legion.float32),
-        ('amplitude', legion.float32)]))
+        ('amplitude_0', legion.float32),
+        ('amplitude_1', legion.float32),
+        ('amplitude_2', legion.float32),
+        ('amplitude_3', legion.float32),
+        ('amplitude_4', legion.float32)]))
     legion.fill(diffraction, 'accumulator', 0.)
     legion.fill(diffraction, 'weight', 0.)
-    legion.fill(diffraction, 'amplitude', 0.)
+    legion.fill(diffraction, 'amplitude_0', 0.)
+    legion.fill(diffraction, 'amplitude_1', 0.)
+    legion.fill(diffraction, 'amplitude_2', 0.)
+    legion.fill(diffraction, 'amplitude_3', 0.)
+    legion.fill(diffraction, 'amplitude_4', 0.)
 
-    n_reconstructions = 4
+    hio_betas = numpy.linspace(.05, .1, 5)
+    sw_threshes = numpy.linspace(.14, .16, 2)
+
+    n_reconstructions = hio_betas.size * sw_threshes.size
+
+    # reconstructions = Region((n_reconstructions,) + volume_shape, OrderedDict([
+    #     ('support', legion.bool_),
+    #     ('rho', legion.complex64)]))
+    # reconstructions_part = Partition.restrict(
+    #     reconstructions, [n_reconstructions], numpy.eye(4, 1), (1,) + volume_shape)
+    # legion.fill(reconstructions, 'support', False)
+    # legion.fill(reconstructions, 'rho', 0.)
+
     reconstructions = []
     for i in range(n_reconstructions):
         reconstruction = Region(volume_shape, OrderedDict([
@@ -204,11 +325,15 @@ def solve(n_runs):
     max_pixel_dist = load_pixels(pixels).get()
     voxel_length = 2 * max_pixel_dist / (N_POINTS - 1)
 
-    images_per_solve = 2
+    images_per_solve = 4
+    iterations_ahead = 5
+
+    n_fields = 5
 
     complete = False
     iteration = 0
-    fences = []
+    futures = []
+    n_events_ready = []
     while not complete or iteration < 50:
         if not complete:
             # Obtain the newest copy of the data.
@@ -219,36 +344,41 @@ def solve(n_runs):
 
             # Preprocess data.
             index_launch(
-                [n_procs], preprocess,
+                [n_procs], preprocess_tasks[iteration % n_fields],
                 images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
                 voxel_length)
 
-            merge(diffraction)
+            futures.append(merge_tasks[iteration % n_fields](diffraction))
 
         # Run solver.
-        assert n_reconstructions == 4
         hio_loop = 100
         er_loop = hio_loop // 2
-        solve_step(diffraction, reconstructions[0], 0, iteration,
-                   hio_loop, .1, er_loop, .14)
-        solve_step(diffraction, reconstructions[1], 1, iteration,
-                   hio_loop, .05, er_loop, .14)
-        solve_step(diffraction, reconstructions[2], 2, iteration,
-                   hio_loop, .1, er_loop, .16)
-        solve_step(diffraction, reconstructions[3], 3, iteration,
-                   hio_loop, .05, er_loop, .16)
+        for i, (hio_beta, sw_thresh) in enumerate(itertools.product(hio_betas, sw_threshes)):
+            solve_step_tasks[iteration % n_fields](
+                diffraction, reconstructions[i], i, iteration,
+                hio_loop, hio_beta, er_loop, sw_thresh)
+        # index_launch(
+        #     [n_reconstructions], solve_step_tasks[iteration % n_fields],
+        #     diffraction, reconstructions_part[ID], ID, iteration,
+        #     hio_loop, hio_betas, er_loop, sw_threshes)
 
         if not complete:
-            # Make sure we don't run more than 2 iterations ahead.
-            fences.append(legion.execution_fence(future=True))
-            if iteration - 2 >= 0:
-                fences[iteration - 2].get()
+            # Make sure we don't run more than K iterations ahead.
+            if iteration - iterations_ahead >= 0:
+                futures[iteration - iterations_ahead].get()
 
             # Check that all runs have been read and that all events have been consumed.
             if data_collector.get_num_runs_complete() == n_runs:
-                n_events_ready = index_launch([n_procs], data_collector.get_num_events_ready, reduce='+').get()
-                print(f'All runs complete, {n_events_ready} events remaining')
-                complete = n_events_ready == 0
+                n_events_ready.append(index_launch([n_procs], data_collector.get_num_events_ready, reduce='+'))
+                if iteration - iterations_ahead >= 0:
+                    ready = n_events_ready[iteration - iterations_ahead].get()
+                    print(f'All runs complete, {ready} events remaining', flush=True)
+                    complete = ready == 0
+
+            if complete:
+                for field in range(1, n_fields):
+                    merge_tasks[(iteration + field) % n_fields](diffraction)
+
 
         iteration += 1
 
@@ -258,4 +388,5 @@ def solve(n_runs):
     #     save_images(images_part[idx], idx, point=idx)
     for i in range(n_reconstructions):
         save_rho(reconstructions[i], i)
+    # index_launch([n_reconstructions], save_rho, reconstructions_part[ID], ID)
     save_diffraction(diffraction, 0)

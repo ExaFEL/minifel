@@ -27,6 +27,8 @@ public:
               const char *mapper_name);
   virtual Processor default_policy_select_initial_processor(
                                     MapperContext ctx, const Task &task);
+  virtual TaskPriority default_policy_select_task_priority(
+                                    MapperContext ctx, const Task &task);
 };
 
 SimpleMapper::SimpleMapper(MapperRuntime *rt, Machine machine, Processor local,
@@ -62,6 +64,19 @@ Processor SimpleMapper::default_policy_select_initial_processor(
 
   return DefaultMapper::default_policy_select_initial_processor(ctx, task);
 }
+
+TaskPriority SimpleMapper::default_policy_select_task_priority(
+                                    MapperContext ctx, const Task &task)
+{
+  const char* task_name = task.get_task_name();
+  if (strncmp(task_name, "solver.solve_step", strlen("solver.solve_step")) == 0 ||
+      strncmp(task_name, "solver.merge", strlen("solver.merge")) == 0) {
+    printf("Prioritizing execution of %s\n", task_name);
+    return 1;
+  }
+  return 0;
+}
+
 
 static void create_mappers(Machine machine, Runtime *runtime, const std::set<Processor> &local_procs)
 {

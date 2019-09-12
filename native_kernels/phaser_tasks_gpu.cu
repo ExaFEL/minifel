@@ -228,7 +228,8 @@ struct gpu_phaser_task_args {
   int32_t hio_iter;
   float hio_beta;
   int32_t er_iter;
-  FieldID diffraction_fields[3];
+  int32_t field;
+  FieldID diffraction_fields[7];
   FieldID reconstruction_fields[2];
 };
 
@@ -242,7 +243,7 @@ int64_t gpu_phaser_task(const Task *task,
 
   assert(regions.size() == 2);
 
-  const FieldAccessor<READ_ONLY, float, 3, coord_t, Realm::AffineAccessor<float, 3, coord_t> > amplitude(regions[0], args.diffraction_fields[2]);
+  const FieldAccessor<READ_ONLY, float, 3, coord_t, Realm::AffineAccessor<float, 3, coord_t> > amplitude(regions[0], args.diffraction_fields[2 + args.field]);
   Rect<3> diffraction_rect = runtime->get_index_space_domain(ctx, regions[0].get_logical_region().get_index_space());
   size_t diffraction_strides[3];
   const float *amplitude_origin = amplitude.ptr(diffraction_rect, diffraction_strides);
