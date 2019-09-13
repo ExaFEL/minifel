@@ -82,9 +82,12 @@ gpu_phaser_4 = legion.extern_task(
 gpu_phaser_tasks = [gpu_phaser_0, gpu_phaser_1, gpu_phaser_2, gpu_phaser_3, gpu_phaser_4]
 
 @task(privileges=[R, R, R, R, Reduce('+', 'accumulator', 'weight')], leaf=True)
-def preprocess(images, orientations, active, pixels, diffraction, voxel_length):
-    print(f"Aligning {active.active[0]} events")
-    for l in range(active.active[0]):
+def preprocess(images, orientations, active, pixels, diffraction, voxel_length,
+               idx, slice_size):
+    start = idx*slice_size
+    stop = min((idx+1)*slice_size, active.active[0])
+    print(f"Aligning {start} to {stop-1} out of total {active.active[0]} events")
+    for l in range(start, stop):
         ps.merge_slice(
             images.image[l], pixels.momentum, orientations.orientation[l],
             diffraction.accumulator, diffraction.weight, voxel_length,
@@ -331,8 +334,11 @@ def solve(n_runs):
     max_pixel_dist = load_pixels(pixels).get()
     voxel_length = 2 * max_pixel_dist / (N_POINTS - 1)
 
-    images_per_solve = 4
+    images_per_solve = 2
     iterations_ahead = 5
+
+    images_per_slice = 1
+    n_slices = images_per_solve // images_per_slice
 
     n_fields = 5
 
@@ -349,10 +355,11 @@ def solve(n_runs):
                     images_part[ID], orient_part[ID], active_part[ID], images_per_solve)
 
             # Preprocess data.
-            index_launch(
-                [n_procs], preprocess_tasks[iteration % n_fields],
-                images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
-                voxel_length)
+            for i in range(n_slices):
+                index_launch(
+                    [n_procs], preprocess_tasks[iteration % n_fields],
+                    images_part[ID], orient_part[ID], active_part[ID], pixels, diffraction,
+                    voxel_length, i, images_per_slice)
 
             futures.append(merge_tasks[iteration % n_fields](diffraction))
 
