@@ -71,7 +71,7 @@ TaskPriority SimpleMapper::default_policy_select_task_priority(
   const char* task_name = task.get_task_name();
   if (strncmp(task_name, "solver.solve_step", strlen("solver.solve_step")) == 0 ||
       strncmp(task_name, "solver.merge", strlen("solver.merge")) == 0) {
-    printf("Prioritizing execution of %s\n", task_name);
+    // printf("Prioritizing execution of %s\n", task_name);
     return 1;
   }
   return 0;

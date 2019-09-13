@@ -18,7 +18,7 @@
 from __future__ import print_function
 
 import legion
-from legion import index_launch, task, MustEpochLaunch, RW, Tunable
+from legion import index_launch, task, MustEpochLaunch, R, RW, Tunable
 import numpy
 from numpy import fft
 import os
