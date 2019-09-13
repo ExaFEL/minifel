@@ -40,6 +40,8 @@ import pysingfel as ps
 use_cpu = False
 use_gpu = True
 
+gpu_no_overlap = False
+
 N_POINTS = 201
 
 gpu_phaser_0 = legion.extern_task(
@@ -163,7 +165,11 @@ def solve_step(field, diffraction, reconstruction, rank, iteration,
         phaser.HIO_loop(hio_iter, hio_beta)
         phaser.ER_loop(er_iter)
     if use_gpu:
+        if gpu_no_overlap:
+            legion.c.legion_runtime_enable_scheduler_lock()
         gpu_phaser_tasks[field](diffraction, reconstruction, hio_iter, hio_beta, er_iter, field)
+        if gpu_no_overlap:
+            legion.c.legion_runtime_disable_scheduler_lock()
     if use_cpu and use_gpu:
         assert numpy.array_equal(reconstruction.support, phaser.get_support(True))
         gpu_rho = reconstruction.rho
