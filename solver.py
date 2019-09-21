@@ -167,16 +167,20 @@ def solve(n_runs):
     max_pixel_dist = load_pixels(pixels).get()
     voxel_length = 2 * max_pixel_dist / (N_POINTS - 1)
 
+    images_per_solve = n_events_per_node
+    iterations_ahead = 2
+
     complete = False
     iteration = 0
     fences = []
+    n_events_ready = []
     while not complete or iteration < 50:
         if not complete:
             # Obtain the newest copy of the data.
             with MustEpochLaunch([n_procs]):
                 index_launch(
                     [n_procs], data_collector.fill_data_region,
-                    images_part[ID], orient_part[ID], active_part[ID])
+                    images_part[ID], orient_part[ID], active_part[ID], images_per_solve)
 
             # Preprocess data.
             index_launch(
@@ -198,13 +202,18 @@ def solve(n_runs):
                    hio_loop, .05, er_loop, .16)
 
         if not complete:
-            # Make sure we don't run more than 2 iterations ahead.
+            # Make sure we don't run more than N iterations ahead.
             fences.append(legion.execution_fence(future=True))
-            if iteration - 2 >= 0:
-                fences[iteration - 2].get()
+            if iteration - iterations_ahead >= 0:
+                fences[iteration - iterations_ahead].get()
 
-            # Check that all runs have been read.
-            complete = data_collector.get_num_runs_complete() == n_runs
+            # Check that all runs have been read and that all events have been consumed.
+            if data_collector.get_num_runs_complete() == n_runs:
+                n_events_ready.append(index_launch([n_procs], data_collector.get_num_events_ready, active_part[ID], reduce='+'))
+                if iteration - iterations_ahead >= 0:
+                    ready = n_events_ready[iteration - iterations_ahead].get()
+                    print(f'All runs complete, {ready} events remaining', flush=True)
+                    complete = ready == 0
 
         iteration += 1
 
