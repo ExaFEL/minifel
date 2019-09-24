@@ -207,7 +207,9 @@ git clone https://github.com/slac-lcls/lcls2.git $LCLS2_DIR
 ./install_pysingfel.sh
 
 # Install cupy.
-./install_cupy.sh
+if [[ $(hostname) != "cori"* ]]; then
+    ./install_cupy.sh
+fi
 
 echo
 echo "Done. Please run 'source env.sh' to use this build."
