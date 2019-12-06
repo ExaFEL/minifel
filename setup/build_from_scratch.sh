@@ -32,6 +32,12 @@ export CRAYPE_LINK_TYPE=dynamic # allow dynamic linking
 # disable Cori-specific Python environment
 unset PYTHONSTARTUP
 
+# Avoid problems between Python, MPI, and HugePages
+module unload craype-hugepages2M
+
+# Make sure Cray-FFTW get loaded first to avoid Conda's MKL
+export LD_PRELOAD=/opt/cray/pe/fftw/3.3.8.2/haswell/lib/libfftw3.so
+
 export USE_CUDA=${USE_CUDA:-0}
 export USE_GASNET=${USE_GASNET:-1}
 export CONDUIT=${CONDUIT:-aries}
@@ -55,6 +61,10 @@ export PATH="/opt/rh/devtoolset-7/root/usr/bin:$PATH"
 export CC=gcc
 export CXX=g++
 
+# unbreak Conda's default MPICH installation
+export MPICH_CC="\$CC"
+export MPICH_CXX="\$CXX"
+
 export USE_CUDA=${USE_CUDA:-0}
 export USE_GASNET=${USE_GASNET:-1}
 export CONDUIT=${CONDUIT:-mpi}
@@ -70,6 +80,10 @@ else
     cat > env.sh <<EOF
 export CC="$CC"
 export CXX="$CXX"
+
+# unbreak Conda's default MPICH installation
+export MPICH_CC="\$CC"
+export MPICH_CXX="\$CXX"
 
 export USE_CUDA=${USE_CUDA:-0}
 export USE_GASNET=${USE_GASNET:-0}
@@ -171,7 +185,13 @@ conda install -y bitstruct -c conda-forge
 if [[ $(hostname --fqdn) = *"summit"* ]]; then
     CC=$OMPI_CC MPICC=mpicc pip install -v --no-binary mpi4py mpi4py
 elif [[ $(hostname) = "cori"* ]]; then
-    CC=gcc MPICC=cc pip install -v --no-binary mpi4py mpi4py
+    rm -rf mpi4py-*
+    wget https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-3.0.0.tar.gz
+    tar zxvf mpi4py-3.0.0.tar.gz
+    pushd mpi4py-3.0.0
+    python setup.py build --mpicc="$(which cc) -shared"
+    python setup.py install
+    popd
 elif [[ $(hostname) = "sapling" ]]; then
     MPICC=mpicc pip install -v --no-binary mpi4py mpi4py
 fi
@@ -180,7 +200,7 @@ fi
 # conda build relmanage/recipes/legion/ --output-folder channels/external/ --python $PYVER
 # conda install -y legion -c file://`pwd`/channels/external --override-channels
 
-if [[ $GASNET_ROOT == $PWD/gasnet/release ]]; then
+if [[ $USE_GASNET -eq 1 && $GASNET_ROOT == $PWD/gasnet/release ]]; then
     rm -rf gasnet
     git clone https://github.com/StanfordLegion/gasnet.git
     pushd gasnet
