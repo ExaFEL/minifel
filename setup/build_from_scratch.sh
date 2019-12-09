@@ -181,17 +181,16 @@ conda activate "$CONDA_ENV_DIR"
 conda install -y amityping -c lcls-ii
 conda install -y bitstruct -c conda-forge
 
+# Workaround for Conda forcing the use of an older version of ld that breaks on Cori
+if [[ $(hostname) = "cori"* ]]; then
+    mv "$CONDA_ENV_DIR"/compiler_compat "$CONDA_ENV_DIR"/compiler_compat.backup
+fi
+
 # Workaround for mpi4py not being built with the right MPI.
 if [[ $(hostname --fqdn) = *"summit"* ]]; then
     CC=$OMPI_CC MPICC=mpicc pip install -v --no-binary mpi4py mpi4py
 elif [[ $(hostname) = "cori"* ]]; then
-    rm -rf mpi4py-*
-    wget https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-3.0.0.tar.gz
-    tar zxvf mpi4py-3.0.0.tar.gz
-    pushd mpi4py-3.0.0
-    python setup.py build --mpicc="$(which cc) -shared"
-    python setup.py install
-    popd
+    CC=gcc MPICC=cc pip install -v --no-binary mpi4py mpi4py
 elif [[ $(hostname) = "sapling" ]]; then
     MPICC=mpicc pip install -v --no-binary mpi4py mpi4py
 fi
