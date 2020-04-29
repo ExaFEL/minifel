@@ -93,6 +93,7 @@ fi
 
 cat >> env.sh <<EOF
 export GASNET_ROOT="${GASNET_ROOT:-$PWD/gasnet/release}"
+export USE_HDF=1
 
 export LG_RT_DIR="${LG_RT_DIR:-$PWD/legion/runtime}"
 export LEGION_DEBUG=1
